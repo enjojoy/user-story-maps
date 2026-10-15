@@ -269,7 +269,10 @@ gaps: []
 
 def red_frame_boxes(im, min_gap=40):
     """Bounding boxes of the pure-red frames drawn on the test screenshots (one box per frame, found by column gaps)."""
-    import numpy as np
+    try:
+        import numpy as np
+    except ImportError:
+        raise unittest.SkipTest("numpy not installed")
     a = np.asarray(im.convert("RGB")).astype(int)
     red = (a[:, :, 0] > 225) & (a[:, :, 1] < 70) & (a[:, :, 2] < 70)  # pure red only (the browser frame has its own, lighter red dot)
     cols = np.where(red.any(axis=0))[0]

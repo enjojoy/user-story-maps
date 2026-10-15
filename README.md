@@ -72,7 +72,7 @@ tests/                            python3 -m unittest discover -s tests
 ```
 
 ## Requirements
-Python 3.8+. Optional: `pip install pillow` (images, device frames, PDF, architecture diagram), Graphviz (`dot`, better flow layout; a built-in renderer is the fallback), `pip install pyyaml` (full YAML), mermaid-cli (render `.mmd` to PNG). Fonts named in `theme:` are used if installed; with `google_font: true` an open-licensed Google Font is downloaded once into `~/.cache/storymap/fonts` (never into the repo).
+Python 3.8+. Optional: `pip install pillow` (images, device frames, PDF, architecture diagram), Graphviz (`dot`, better flow layout; a built-in renderer is the fallback), `pip install pyyaml` (full YAML), mermaid-cli (render `.mmd` to PNG). The test suite (`python3 -m unittest discover -s tests`) skips the image tests when Pillow or numpy is missing. Fonts named in `theme:` are used if installed; with `google_font: true` an open-licensed Google Font is downloaded once into `~/.cache/storymap/fonts` (never into the repo).
 
 ## Privacy and third-party content
 Screenshots and stories end up in your repo. Capture with a demo account and fake data only; never commit credentials or session files. If you document someone else's app, add a disclaimer (`app.disclaimer`) and check its licence for the screenshots (see `examples/wikipedia-ios/README.md`). See the capture guide in the skill.
