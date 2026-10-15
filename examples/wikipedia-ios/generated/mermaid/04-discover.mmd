@@ -1,0 +1,22 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Helvetica","fontSize":"16px","primaryColor":"#FFFFFF","primaryTextColor":"#202122","primaryBorderColor":"#3366CC","lineColor":"#3366CC","secondaryColor":"#F8F9FA","tertiaryColor":"#F0F2F4"}}}%%
+flowchart LR
+  n_search["Search tab<br/><i>Built</i>"]:::built
+  n_search_results["Search results<br/><i>Built</i>"]:::built
+  n_saved["Saved (empty)<br/><i>Unverified</i>"]:::unverified
+  n_tabs_overview["Article tabs overview<br/><i>Built</i>"]:::built
+  n_places["Places map<br/><i>Unverified</i>"]:::unverified
+  n_in_home(["From 3 · Reading: Explore feed - Community"]):::portal
+  n_out_article(["Go to 3 · Reading: Article"]):::portal
+  n_in_article(["From 3 · Reading: Article"]):::portal
+  n_in_home -->|"Tap search and type a query"| n_search_results
+  n_search -->|"Type a query"| n_search_results
+  n_search_results -->|"Tap a result"| n_out_article
+  n_in_article -.->|"(Tap Save, then open Saved)"| n_saved
+  n_in_article -.->|"(Tap Tabs)"| n_tabs_overview
+  n_in_home -->|"Tap the tabs button"| n_tabs_overview
+  n_in_home -.->|"(Tap Places tab)"| n_places
+  classDef built fill:#E3F7F3,stroke:#14866D,stroke-width:3px,color:#202122;
+  classDef partly fill:#F7F2E3,stroke:#D9A300,stroke-width:3px,color:#202122;
+  classDef unverified fill:#E3EAF7,stroke:#6B8FD6,stroke-width:2px,stroke-dasharray:4 3,color:#202122;
+  classDef missing fill:#E3ECF7,stroke:#72777D,stroke-width:2px,stroke-dasharray:5 4,color:#202122;
+  classDef portal fill:#E4DEF7,stroke:#5933CC,color:#202122;

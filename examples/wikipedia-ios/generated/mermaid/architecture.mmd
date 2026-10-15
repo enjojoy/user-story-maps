@@ -1,0 +1,95 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Helvetica","fontSize":"16px","primaryColor":"#FFFFFF","primaryTextColor":"#202122","primaryBorderColor":"#3366CC","lineColor":"#3366CC","secondaryColor":"#F8F9FA","tertiaryColor":"#F0F2F4"}}}%%
+flowchart LR
+  subgraph n_sg_onboarding["Onboarding"]
+    direction TB
+    n_ob_intro["Onboarding - welcome<br/><i>Built</i>"]:::built
+    n_ob_privacy["Onboarding - data and privacy<br/><i>Built</i>"]:::built
+    n_ob_languages["Onboarding - languages<br/><i>Built</i>"]:::built
+    n_ob_personalize["Onboarding - follow your curiosity<br/><i>Unverified</i>"]:::unverified
+    n_ob_interests["Onboarding - interests<br/><i>Unverified</i>"]:::unverified
+    n_ob_feed["Onboarding - feed preference<br/><i>Unverified</i>"]:::unverified
+  end
+  subgraph n_sg_access["Login & account access"]
+    direction TB
+    n_login["Log in form<br/><i>Unverified</i>"]:::unverified
+    n_activity["Activity (logged out)<br/><i>Built</i>"]:::built
+  end
+  subgraph n_sg_journey["Main user journey"]
+    direction TB
+    n_home["Explore feed - Community<br/><i>Built</i>"]:::built
+    n_home_foryou["Explore feed - For You<br/><i>Built</i>"]:::built
+    n_article["Article<br/><i>Unverified</i>"]:::unverified
+    n_article_toc["Article - table of contents<br/><i>Built</i>"]:::built
+    n_article_theme["Article - reading themes<br/><i>Built</i>"]:::built
+    n_article_overflow["Article - more menu<br/><i>Built</i>"]:::built
+    n_article_find["Article - find in article<br/><i>Built</i>"]:::built
+    n_article_languages["Article - change language<br/><i>Built</i>"]:::built
+    n_image_gallery["Lead image viewer<br/><i>Unverified</i>"]:::unverified
+  end
+  subgraph n_sg_library["Content & library"]
+    direction TB
+    n_search["Search tab<br/><i>Built</i>"]:::built
+    n_search_results["Search results<br/><i>Built</i>"]:::built
+    n_saved["Saved (empty)<br/><i>Unverified</i>"]:::unverified
+    n_tabs_overview["Article tabs overview<br/><i>Built</i>"]:::built
+    n_places["Places map<br/><i>Unverified</i>"]:::unverified
+  end
+  subgraph n_sg_settings["Settings & account"]
+    direction TB
+    n_profile["Account menu<br/><i>Partly built</i>"]:::partly
+    n_settings["Settings<br/><i>Unverified</i>"]:::unverified
+    n_settings_languages["Settings - Wikipedia languages<br/><i>Built</i>"]:::built
+    n_dark_home["Explore feed (dark)<br/><i>Built</i>"]:::built
+    n_dark_search_results["Search results (dark)<br/><i>Built</i>"]:::built
+    n_dark_article["Article (dark)<br/><i>Built</i>"]:::built
+  end
+  subgraph n_sg_payments["Donations"]
+    direction TB
+    n_donate["Donation page<br/><i>Partly built</i>"]:::partly
+  end
+  subgraph n_sg_support["Support & legal"]
+    direction TB
+    n_privacy_policy["Privacy policy<br/><i>Unverified</i>"]:::unverified
+  end
+  n_ob_intro --> n_ob_privacy
+  n_ob_privacy --> n_ob_languages
+  n_ob_languages --> n_ob_personalize
+  n_ob_personalize --> n_ob_interests
+  n_ob_interests --> n_ob_feed
+  n_ob_feed ==>|"Tap Next (onboarding complete)"| n_home
+  n_profile ==>|"Tap Log in / Join Wikipedia"| n_login
+  n_activity -.-> n_login
+  n_home --> n_home_foryou
+  n_article --> n_article_toc
+  n_article --> n_article_theme
+  n_article --> n_article_overflow
+  n_article --> n_article_find
+  n_article --> n_article_languages
+  n_article -.-> n_image_gallery
+  n_home ==>|"Tap search and type a query"| n_search_results
+  n_search --> n_search_results
+  n_search_results ==>|"Tap a result"| n_article
+  n_article -.->|"(Tap Save, then open Saved)"| n_saved
+  n_article -.->|"(Tap Tabs)"| n_tabs_overview
+  n_home ==>|"Tap the tabs button"| n_tabs_overview
+  n_home -.->|"(Tap Places tab)"| n_places
+  n_home -.->|"(Tap Activity tab)"| n_activity
+  n_home ==>|"Tap the profile icon"| n_profile
+  n_profile --> n_settings
+  n_settings --> n_settings_languages
+  n_settings -.->|"(Tap Privacy policy)"| n_privacy_policy
+  n_profile ==>|"Tap Donate"| n_donate
+  n_dark_home --> n_dark_search_results
+  n_dark_search_results --> n_dark_article
+  style n_sg_onboarding fill:#EEFAF4,stroke:#31C476,stroke-width:2px
+  style n_sg_access fill:#EFFBFA,stroke:#3FCFC2,stroke-width:2px
+  style n_sg_journey fill:#EEF6FA,stroke:#3190C4,stroke-width:2px
+  style n_sg_library fill:#EFF1FB,stroke:#3F5CCF,stroke-width:2px
+  style n_sg_settings fill:#F1EEFA,stroke:#5531C4,stroke-width:2px
+  style n_sg_payments fill:#F7EFFB,stroke:#A23FCF,stroke-width:2px
+  style n_sg_support fill:#FAEEF8,stroke:#C431B0,stroke-width:2px
+  classDef built fill:#E3F7F3,stroke:#14866D,stroke-width:3px,color:#202122;
+  classDef partly fill:#F7F2E3,stroke:#D9A300,stroke-width:3px,color:#202122;
+  classDef unverified fill:#E3EAF7,stroke:#6B8FD6,stroke-width:2px,stroke-dasharray:4 3,color:#202122;
+  classDef missing fill:#E3ECF7,stroke:#72777D,stroke-width:2px,stroke-dasharray:5 4,color:#202122;
+  classDef portal fill:#E4DEF7,stroke:#5933CC,color:#202122;

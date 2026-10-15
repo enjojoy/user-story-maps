@@ -1,0 +1,16 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Helvetica","fontSize":"16px","primaryColor":"#FFFFFF","primaryTextColor":"#1F2D26","primaryBorderColor":"#3A7D5B","lineColor":"#3A7D5B","secondaryColor":"#F7FAF9","tertiaryColor":"#F0F4F2"}}}%%
+flowchart LR
+  n_t_onboarding["<b>Onboarding</b><br/>2 screens · 3 stories<br/>2 built · 1 partly"]
+  n_t_journey["<b>Main user journey</b><br/>4 screens · 5 stories<br/>2 built · 3 partly"]
+  n_t_notifications["<b>Reminders</b><br/>3 screens · 3 stories<br/>1 built · 1 unverified · 1 missing"]
+  n_t_settings["<b>Settings & sharing</b><br/>3 screens · 5 stories<br/>1 built · 1 unverified · 3 missing"]
+  n_t_onboarding ==>|"Tap Skip for now +1 more"| n_t_journey
+  n_t_journey ==>|"Tap +"| n_t_onboarding
+  n_t_journey ==>|"Tap Edit reminder"| n_t_notifications
+  n_t_notifications ==>|"Tap the notification"| n_t_journey
+  n_t_journey ==>|"Tap Settings tab"| n_t_settings
+  n_t_settings ==>|"Tap Default reminder time"| n_t_notifications
+  style n_t_onboarding fill:#ECF2EB,stroke:#47843D,stroke-width:3px,color:#1F2D26
+  style n_t_journey fill:#ECF4EF,stroke:#469660,stroke-width:3px,color:#1F2D26
+  style n_t_notifications fill:#EBF2F1,stroke:#3D8476,stroke-width:3px,color:#1F2D26
+  style n_t_settings fill:#ECF2F4,stroke:#468196,stroke-width:3px,color:#1F2D26

@@ -1,0 +1,17 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Helvetica","fontSize":"16px","primaryColor":"#FFFFFF","primaryTextColor":"#202122","primaryBorderColor":"#3366CC","lineColor":"#3366CC","secondaryColor":"#F8F9FA","tertiaryColor":"#F0F2F4"}}}%%
+flowchart LR
+  n_first_run["<b>1 · First launch</b><br/>6 screens · 6 stories<br/>5 built · 1 unverified"]:::flow
+  n_login["<b>2 · Login</b><br/>2 screens · 3 stories<br/>2 built · 1 unverified"]:::flow
+  n_reading["<b>3 · Reading</b><br/>9 screens · 11 stories<br/>9 built · 2 unverified"]:::flow
+  n_discover["<b>4 · Search and library</b><br/>5 screens · 5 stories<br/>4 built · 1 unverified"]:::flow
+  n_preferences["<b>5 · Profile and settings</b><br/>4 screens · 2 stories<br/>1 built · 1 unverified"]:::flow
+  n_dark["<b>7 · Dark theme</b><br/>3 screens · 1 stories<br/>1 built"]:::flow
+  n_support_money["<b>6 · Donate</b><br/>1 screens · 1 stories<br/>1 partly"]:::flow
+  n_first_run -->|"Tap Next (onboarding complete)"| n_reading
+  n_preferences -->|"Tap Log in / Join Wikipedia"| n_login
+  n_reading -->|"Tap search and type a query"| n_discover
+  n_discover -->|"Tap a result"| n_reading
+  n_reading -->|"(Tap Activity tab)"| n_login
+  n_reading -->|"Tap the profile icon"| n_preferences
+  n_preferences -->|"Tap Donate"| n_support_money
+  classDef flow fill:#FFFFFF,stroke:#3366CC,stroke-width:3px,color:#202122;

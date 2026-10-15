@@ -1,0 +1,101 @@
+# <App name> - story map source.  THE ONE FILE YOU EDIT.
+# After any change run:   python3 docs/story-map/storymap.py build
+# Format: simple YAML. One value per line, 2-space indents, "- " starts a list item, "#" starts a comment.
+# Quote a value with "double quotes" if it contains a colon followed by a space, or starts with [ { * & ! | >.
+
+app:
+  name: My App
+  platform: ios                 # ios | android | web
+  # device: iphone-island       # optional: one device frame model for every screen (default: auto-detect)
+  version: "main @ abc1234"     # the commit / build / release you checked statuses against
+  checked: 2026-01-01           # date you last verified statuses against code or a running app
+  summary: One sentence about what the app does.
+
+personas:                       # who the stories are for
+  - id: newcomer                # short id used in stories (lowercase, no spaces)
+    name: New user              # shown in tables
+    as_a: new user              # used in "As a ..."; defaults to the lower-cased name
+    description: Opens the app for the first time.
+
+# theme:                        # OPTIONAL - make the generated map look like the app (light background always).
+#   primary: "#2D7A5C"          #   brand colour; status / severity / topic colours are derived from it
+#   text: "#202124"             #   also: background, surface, border, secondary (all #RRGGBB)
+#   font: "Inter"               #   family name; proprietary fonts are only referenced, with a safe fallback
+#   google_font: true           #   true = download that family from Google Fonts if it is open-licensed
+#   # font_file: tools/Inter.ttf  # or point at a font file you are allowed to ship (relative path)
+#   # status:   { built: "#...", partly: "#...", unverified: "#...", missing: "#..." }
+#   # severity: { high: "#...", medium: "#...", low: "#..." }
+#   # Fill it from the app's code:  python3 docs/story-map/storymap.py theme-from path/to/app/source
+#   device:                     #   device mockup around every screenshot (drawn with Pillow; auto-detected from the screenshot)
+#     style: black              #   black | titanium | light
+#     # model: iphone-island    #   default model: iphone-island | iphone-notch | iphone-home-button | android-generic | tablet | browser-window | none
+#     badge: label              #   label (dot + text under the device) | dot
+#     # frames: frames.json     #   OPTIONAL: your own frame PNGs (never commit them), see skills/user-story-maps/references/frames.md
+
+topics:                         # topic areas = how the app is architected. EVERY flow belongs to one.
+  # Recommended standard set - keep what applies, delete the rest, add your own. Colours are derived
+  # from the theme; add `color: "#RRGGBB"` to override one.
+  - id: onboarding
+    title: Onboarding
+    description: First launch, intro, permissions, first-run setup.
+  - id: access
+    title: Login & account access
+    description: Sign-in, sign-up, password reset, sessions (delete if the app has no accounts).
+  - id: journey
+    title: Main user journey
+    description: The core value - what people open the app to do.
+  - id: library
+    title: Content & library
+    description: Browsing, search, saved items, history.
+  - id: settings
+    title: Settings & account
+    description: Preferences, profile, notifications, data and privacy controls.
+  - id: payments
+    title: Payments & subscription
+    description: Paywall, purchase, restore, billing.
+  - id: support
+    title: Support & legal
+    description: Help, feedback, terms, privacy, about.
+
+flows:                          # a flow = one journey through the app (becomes one diagram)
+  - id: start
+    title: "1 · Getting started"
+    topic: onboarding           # must be one of the topic ids above (a screen can override with its own `topic:`)
+    description: First launch to first success.
+    edges:                      # one per line: "from_screen_id -> to_screen_id: what the user does"
+                                # (2+ edges leaving one screen are drawn as an aligned tree; a single edge is a straight arrow)
+      # - "home -> settings: Tap the gear icon"      # a label starting with "(" is drawn dashed (optional / indirect)
+
+screens:                        # every screen / state you want on the map
+  - id: home                    # unique id; stories refer to it
+    title: Home
+    flow: start                 # which flow it belongs to
+    image: screens/home.png     # REAL screenshot, relative to this folder (see the capture guide in SKILL.md)
+    not_captured: Replace with a real screenshot.   # delete this line once the image exists
+    # notes: optional free text
+    # status: partly            # optional override; normally derived from the stories that use the screen
+    # device: tablet            # optional device frame for this screen (default: auto-detected from the image size and app.platform)
+
+stories:
+  # status: built | partly | unverified | missing
+  #   built      - checked in code or on a running app; REQUIRES `verified:` (how + when) and ideally `where:`
+  #   partly     - exists but incomplete or rough; say what is missing in notes
+  #   unverified - you could not confirm it (default). Use this whenever you are unsure.
+  #   missing    - not built / planned
+  - id: US-01
+    persona: newcomer
+    want: to see what the app does when I open it
+    so_that: I know it is worth my time
+    # story: "As a ..., I want ... so that ..."   # optional: full sentence overrides persona/want/so_that
+    screens: [home]
+    status: unverified
+    # verified: "app, 2026-01-01"                 # required when status is built
+    # where: src/screens/Home                     # file / PR / endpoint where it lives
+    # notes: anything a reader should know
+
+gaps:                           # dead ends, missing states, risks (optional)
+  - id: G-01
+    severity: medium            # high | medium | low
+    title: Example gap
+    detail: What is wrong and who it hurts.
+    stories: [US-01]

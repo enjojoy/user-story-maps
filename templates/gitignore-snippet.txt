@@ -1,0 +1,9 @@
+# story map: never commit demo sessions or credentials
+.demo-session.json
+*.storage-state.json
+.env
+.env.*
+docs/story-map/**/__pycache__/
+# story map: your own (separately licensed) device frames are never committed
+docs/story-map/frames.json
+docs/story-map/frames/

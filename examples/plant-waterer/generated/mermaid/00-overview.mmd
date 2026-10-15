@@ -1,0 +1,13 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Helvetica","fontSize":"16px","primaryColor":"#FFFFFF","primaryTextColor":"#1F2D26","primaryBorderColor":"#3A7D5B","lineColor":"#3A7D5B","secondaryColor":"#F7FAF9","tertiaryColor":"#F0F4F2"}}}%%
+flowchart LR
+  n_onboarding["<b>1 · Getting started</b><br/>2 screens · 3 stories<br/>2 built · 1 partly"]:::flow
+  n_plants["<b>2 · Plants and watering</b><br/>4 screens · 5 stories<br/>2 built · 3 partly"]:::flow
+  n_reminders["<b>3 · Reminders</b><br/>3 screens · 3 stories<br/>1 built · 1 unverified · 1 missing"]:::flow
+  n_sharing["<b>4 · Settings and sharing</b><br/>3 screens · 5 stories<br/>1 built · 1 unverified · 3 missing"]:::flow
+  n_onboarding -->|"Tap Skip for now"| n_plants
+  n_plants -->|"Tap +"| n_onboarding
+  n_plants -->|"Tap Edit reminder"| n_reminders
+  n_reminders -->|"Tap the notification"| n_plants
+  n_plants -->|"Tap Settings tab"| n_sharing
+  n_sharing -->|"Tap Default reminder time"| n_reminders
+  classDef flow fill:#FFFFFF,stroke:#3A7D5B,stroke-width:3px,color:#1F2D26;

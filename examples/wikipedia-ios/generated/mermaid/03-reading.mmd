@@ -1,0 +1,40 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Helvetica","fontSize":"16px","primaryColor":"#FFFFFF","primaryTextColor":"#202122","primaryBorderColor":"#3366CC","lineColor":"#3366CC","secondaryColor":"#F8F9FA","tertiaryColor":"#F0F2F4"}}}%%
+flowchart LR
+  n_home["Explore feed - Community<br/><i>Built</i>"]:::built
+  n_home_foryou["Explore feed - For You<br/><i>Built</i>"]:::built
+  n_article["Article<br/><i>Unverified</i>"]:::unverified
+  n_article_toc["Article - table of contents<br/><i>Built</i>"]:::built
+  n_article_theme["Article - reading themes<br/><i>Built</i>"]:::built
+  n_article_overflow["Article - more menu<br/><i>Built</i>"]:::built
+  n_article_find["Article - find in article<br/><i>Built</i>"]:::built
+  n_article_languages["Article - change language<br/><i>Built</i>"]:::built
+  n_image_gallery["Lead image viewer<br/><i>Unverified</i>"]:::unverified
+  n_in_ob_feed(["From 1 · First launch: Onboarding - feed preference"]):::portal
+  n_out_search_results(["Go to 4 · Search and library: Search results"]):::portal
+  n_in_search_results(["From 4 · Search and library: Search results"]):::portal
+  n_out_saved(["Go to 4 · Search and library: Saved (empty)"]):::portal
+  n_out_tabs_overview(["Go to 4 · Search and library: Article tabs overview"]):::portal
+  n_out_places(["Go to 4 · Search and library: Places map"]):::portal
+  n_out_activity(["Go to 2 · Login: Activity (logged out)"]):::portal
+  n_out_profile(["Go to 5 · Profile and settings: Account menu"]):::portal
+  n_in_ob_feed -->|"Tap Next (onboarding complete)"| n_home
+  n_home -->|"Tap For You"| n_home_foryou
+  n_article -->|"Tap Contents"| n_article_toc
+  n_article -->|"Tap Reading themes"| n_article_theme
+  n_article -->|"Tap the more menu"| n_article_overflow
+  n_article -->|"Tap Find in article"| n_article_find
+  n_article -->|"Tap Languages"| n_article_languages
+  n_article -.->|"(Tap the lead image)"| n_image_gallery
+  n_home -->|"Tap search and type a query"| n_out_search_results
+  n_in_search_results -->|"Tap a result"| n_article
+  n_article -.->|"(Tap Save, then open Saved)"| n_out_saved
+  n_article -.->|"(Tap Tabs)"| n_out_tabs_overview
+  n_home -->|"Tap the tabs button"| n_out_tabs_overview
+  n_home -.->|"(Tap Places tab)"| n_out_places
+  n_home -.->|"(Tap Activity tab)"| n_out_activity
+  n_home -->|"Tap the profile icon"| n_out_profile
+  classDef built fill:#E3F7F3,stroke:#14866D,stroke-width:3px,color:#202122;
+  classDef partly fill:#F7F2E3,stroke:#D9A300,stroke-width:3px,color:#202122;
+  classDef unverified fill:#E3EAF7,stroke:#6B8FD6,stroke-width:2px,stroke-dasharray:4 3,color:#202122;
+  classDef missing fill:#E3ECF7,stroke:#72777D,stroke-width:2px,stroke-dasharray:5 4,color:#202122;
+  classDef portal fill:#E4DEF7,stroke:#5933CC,color:#202122;

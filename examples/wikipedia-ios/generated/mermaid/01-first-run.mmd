@@ -1,0 +1,20 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Helvetica","fontSize":"16px","primaryColor":"#FFFFFF","primaryTextColor":"#202122","primaryBorderColor":"#3366CC","lineColor":"#3366CC","secondaryColor":"#F8F9FA","tertiaryColor":"#F0F2F4"}}}%%
+flowchart LR
+  n_ob_intro["Onboarding - welcome<br/><i>Built</i>"]:::built
+  n_ob_privacy["Onboarding - data and privacy<br/><i>Built</i>"]:::built
+  n_ob_languages["Onboarding - languages<br/><i>Built</i>"]:::built
+  n_ob_personalize["Onboarding - follow your curiosity<br/><i>Unverified</i>"]:::unverified
+  n_ob_interests["Onboarding - interests<br/><i>Unverified</i>"]:::unverified
+  n_ob_feed["Onboarding - feed preference<br/><i>Unverified</i>"]:::unverified
+  n_out_home(["Go to 3 · Reading: Explore feed - Community"]):::portal
+  n_ob_intro -->|"Tap Next"| n_ob_privacy
+  n_ob_privacy -->|"Tap Next"| n_ob_languages
+  n_ob_languages -->|"Tap Next"| n_ob_personalize
+  n_ob_personalize -->|"Tap Next"| n_ob_interests
+  n_ob_interests -->|"Tap Next"| n_ob_feed
+  n_ob_feed -->|"Tap Next (onboarding complete)"| n_out_home
+  classDef built fill:#E3F7F3,stroke:#14866D,stroke-width:3px,color:#202122;
+  classDef partly fill:#F7F2E3,stroke:#D9A300,stroke-width:3px,color:#202122;
+  classDef unverified fill:#E3EAF7,stroke:#6B8FD6,stroke-width:2px,stroke-dasharray:4 3,color:#202122;
+  classDef missing fill:#E3ECF7,stroke:#72777D,stroke-width:2px,stroke-dasharray:5 4,color:#202122;
+  classDef portal fill:#E4DEF7,stroke:#5933CC,color:#202122;
