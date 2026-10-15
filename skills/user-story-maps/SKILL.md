@@ -110,6 +110,7 @@ theme:
 | Status | Dot + label under device (`theme.device.badge`: `label`/`dot`). No coloured border |
 | Not captured | Dashed empty device outline + reason |
 | Scaling | Contain by real aspect ratio; never crop/stretch; landscape → rotated frame |
+| Resolution | Every screenshot at ≥ native pixels in `architecture.png`, `overview.png`, `flows/*.png`, `one-pager.png`/`.pdf`; zoom reads all text. Never downscale the map; the canvas grows (large PNGs; `architecture/<topic>.png` = full-res crops per topic) |
 | Swimlanes | `architecture.png`: one coloured lane per topic, ordered by `topics[].order`; screens in aligned grid rows/columns |
 | Architecture arrows | Cross-topic thick, source-topic colour, labelled; in-topic thin grey |
 | Branches | 2+ outgoing edges → tree: trunk, orthogonal bus, children on one aligned row (top→bottom) or column (left→right), centred on parent, labels on drops |
@@ -130,7 +131,11 @@ Files: `docs/story-map/screens/<screen-id>.png`. One device size per app. Raw co
 
 ## Outputs
 
-`generated/`: `story-map.html`, `architecture.png`, `one-pager.pdf`/`.png`, `flows/<flow>.png`, `overview.png`, `flow-map.png`, `story-map.md` (topic table + Mermaid), `user-stories.md`/`.csv`, `gaps-and-risks.md`, `mermaid/*.mmd`, `dot/*.dot`, `thumbs/`.
+`generated/`: `story-map.html`, `architecture.png` (+ `architecture/<topic>.png` crops), `one-pager.pdf`/`.png`, `flows/<flow>.png`, `overview.png`, `flow-map.png` (skipped above 300 MP), `story-map.md` (topic table + Mermaid), `user-stories.md`/`.csv`, `gaps-and-risks.md`, `mermaid/*.mmd`, `dot/*.dot`, `thumbs/`.
+
+## Resolution
+
+`build` draws diagrams with Pillow at a zoom chosen so each device's screenshot area is ≥ its source pixels (`native_zoom`), prints the zoom factors and warns if any is below 1.0×. Capture sharp (web 2×); a 780×1688 phone shot gives device areas of at least 780×1688 px, so maps are tens to hundreds of megapixels (10–30 MB PNG). `story-map.html` embeds reduced copies; the PNGs are the full-res files. Graphviz is not used when Pillow is present (it draws small).
 
 ## Dependencies
 

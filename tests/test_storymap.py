@@ -862,5 +862,63 @@ class TestNoWhiteCards(unittest.TestCase):
         self.assertNotIn("border:1px solid var(--line);border-radius:12px;width:250px", css)   # html .card has no frame
 
 
+@unittest.skipUnless(sm.HAVE_PIL, "Pillow not installed")
+class TestResolution(Base):
+    """Rule: every screenshot in architecture / overview / flows / one-pager is drawn at >= its native pixels."""
+
+    def setUp(self):
+        super().setUp()
+        from PIL import Image
+        for f in os.listdir(os.path.join(self.dir, "screens")):      # smaller sources keep the test light (390x844)
+            p = os.path.join(self.dir, "screens", f)
+            if f.endswith(".png"):
+                Image.open(p).convert("RGB").resize((390, 844)).save(p)
+        sm._DEV_CACHE.clear()
+        sm._img_cache.clear()
+
+    def test_native_zoom_makes_device_screen_at_least_source_size(self):
+        m = sm.load_model(self.dir)
+        sm.apply_theme(m)
+        for box in (sm.ARCH_BOX, sm.OVERVIEW_BOX, (sm.LANDSCAPE_W, sm.PORTRAIT_H)):
+            z = sm.native_zoom(m, box)
+            self.assertGreater(z, 1.0)
+            for s in m["screens"]:
+                im = sm.load_img(m, s)
+                if im is None:
+                    continue
+                rect = sm.screen_device(m, s, box, z)["rect"]
+                self.assertGreaterEqual(rect[2], im.width, (s["id"], box))
+                self.assertGreaterEqual(rect[3], im.height, (s["id"], box))
+        sm._DEV_CACHE.clear()
+
+    def test_build_renders_every_diagram_at_native_resolution(self):
+        self.assertEqual(sm.main(["build", self.dir]), 0)
+        rep = sm.resolution_report()
+        gen = os.path.join(self.dir, "generated")
+        self.assertIn("architecture", rep)
+        self.assertIn("overview", rep)
+        self.assertIn("one-pager", rep)
+        self.assertTrue(any(k.startswith("flows/") for k in rep))
+        for name, k in rep.items():
+            self.assertGreaterEqual(k, 0.99, "%s draws a screenshot at %.2fx of its source pixels" % (name, k))
+        from PIL import Image
+        for f in ("architecture.png", "overview.png", "one-pager.png"):
+            self.assertTrue(os.path.isfile(os.path.join(gen, f)), f)
+        arch = Image.open(os.path.join(gen, "architecture.png"))
+        self.assertGreaterEqual(arch.width * arch.height, 390 * 844 * len(sm.load_model(self.dir)["screens"]) // 2)   # canvas grew, not shrank
+        self.assertTrue(os.path.isdir(os.path.join(gen, "architecture")))
+        self.assertTrue(os.listdir(os.path.join(gen, "architecture")))
+
+    def test_downscaled_render_is_reported_below_native(self):
+        m = sm.load_model(self.dir)
+        sm.apply_theme(m)
+        del sm.RES_LOG[:]
+        sm.set_diagram("tiny")
+        sm.screen_device(m, m["screens"][0], sm.ARCH_BOX, 1)       # zoom 1 = compact design size, far below native
+        sm.set_diagram("other")
+        self.assertLess(sm.resolution_report()["tiny"], 0.5)
+        sm._DEV_CACHE.clear()
+
+
 if __name__ == "__main__":
     unittest.main()

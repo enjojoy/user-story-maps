@@ -26,7 +26,10 @@ try:
 except ImportError:  # the text outputs still work
     HAVE_PIL = False
 
-__version__ = "1.0.0"
+if HAVE_PIL:
+    Image.MAX_IMAGE_PIXELS = None   # native-resolution maps are large on purpose (see "Resolution" in SKILL.md); we only open our own files
+
+__version__ = "1.1.0"
 
 # --------------------------------------------------------------------------- vocabulary
 STATUS = collections.OrderedDict([
@@ -1370,7 +1373,60 @@ def screen_device(m, s, box, scale=1, shadow=True):
     im = load_img(m, s) if image_exists(m, s) else None
     if im is None:
         return placeholder_device(m, s, box, scale)
-    return render_device(m, s, im, detect_model(m, s, im.width, im.height), box, scale, shadow)
+    dv = render_device(m, s, im, detect_model(m, s, im.width, im.height), box, scale, shadow)
+    RES_LOG.append((_CTX["diagram"], s["id"], dv["rect"][2], dv["rect"][3], im.width, im.height))
+    return dv
+
+
+# --------------------------------------------------------------------------- resolution rule
+# Every screenshot in every generated diagram is drawn at >= its native pixels (scale >= 1.0), so zooming in reads all its text.
+# The diagram renderers therefore take a zoom factor `z` (1.0 = the compact design size) chosen by native_zoom().
+RES_LOG = []                 # (diagram, screen id, rendered screen w, h, source w, h) for every framed screenshot drawn
+_CTX = {"diagram": "other"}
+
+
+def set_diagram(name):
+    _CTX["diagram"] = name
+
+
+def resolution_report():
+    """{diagram: min scale} over the screenshots drawn in it (scale = rendered screen width / source width)."""
+    out = {}
+    for dg, sid, rw, rh, iw, ih in RES_LOG:
+        if dg == "other" or not iw or not ih:
+            continue
+        k = min(rw / iw, rh / ih)
+        out[dg] = min(out.get(dg, 9e9), k)
+    return out
+
+
+def _scale_at(m, s, im, bw, bh):
+    """Scale (rendered screen width / source width) of screen s in a device fitted to the box bw x bh pixels."""
+    model = detect_model(m, s, im.width, im.height)
+    fname = _frame_for(m, s.get("device") or m["app"].get("device") or TH["device"]["model"])
+    if fname and _user_frame(m, fname) is not None:
+        r = render_device(m, s, im, model, (bw, bh), 1, True)["rect"]
+        return r[2] / im.width
+    geo = device_geom(model, im.width, im.height, int(bw), int(bh), True)
+    return min(geo["sw"] / (im.height if geo["rot"] else im.width), geo["sh"] / (im.width if geo["rot"] else im.height))
+
+
+def native_zoom(m, box, zmin=1.0):
+    """Smallest zoom z >= zmin such that every captured screenshot, drawn in a device fitted to box*z pixels, shows
+    its screen at >= 1.0x of its source pixels."""
+    if not HAVE_PIL:
+        return zmin
+    shots = [im for im in (load_img(m, s) if image_exists(m, s) else None for s in m["screens"]) if im is not None]
+    if not shots:
+        return zmin
+    pairs = [(s, load_img(m, s)) for s in m["screens"] if image_exists(m, s) and load_img(m, s) is not None]
+    z = zmin
+    for _ in range(40):
+        worst = min(_scale_at(m, s, im, box[0] * z, box[1] * z) for s, im in pairs)
+        if worst >= 1.004:      # a hair above 1.0 so pixel rounding never leaves a screenshot just under native
+            return round(z, 3)
+        z *= max(1.01, 1.0 / max(worst, 1e-3)) ** 0.98 if worst < 0.9 else 1.01
+    return round(z, 3)
 
 
 def make_thumbs(m, gen):
@@ -1667,37 +1723,45 @@ def card_portal(text, kind, sc=1):
     return c
 
 
-def card_flow(m, f):
+def card_flow(m, f, z=1.0, zt=None):
+    """Overview card of one flow: title, up to four of its screens in device frames, status chips. z = zoom of the
+    screens (native resolution); zt = zoom of the text and spacing (default z; smaller keeps the overview compact)."""
+    zt = z if zt is None else zt
+    Z = lambda v: max(1, int(round(v * zt)))
     us = [u for u in m["stories"] if u["flow_eff"] == f["id"]]
     ns = sum(1 for s in m["screens"] if s["flow"] == f["id"])
     tmp = ImageDraw.Draw(Image.new("RGB", (10, 10)))
-    tl = wrap_px(tmp, f["title"], font(28, True), 380)
+    tl = wrap_px(tmp, f["title"], font(Z(28), True), Z(380))
     fs = [x for x in m["screens"] if x["flow"] == f["id"]][:4]
-    minis = [screen_device(m, x, (84, 150), 1) for x in fs]   # a few screens, each inside its device frame
-    MH = (max(v["size"][1] for v in minis) + 6) if minis else 0
-    H = 16 + 36 * len(tl) + 30 + MH + 44 + 14
-    c = Image.new("RGB", (420, H), TH["bg"])
+    minis = [screen_device(m, x, OVERVIEW_BOX, z) for x in fs]   # a few screens, each inside its device frame
+    MH = (max(v["size"][1] for v in minis) + Z(6)) if minis else 0
+    CWD = max(Z(420), sum(v["size"][0] + Z(2) for v in minis) + Z(32))
+    H = Z(16) + Z(36) * len(tl) + Z(30) + MH + Z(44) + Z(14)
+    c = Image.new("RGB", (CWD, H), TH["bg"])
     d = ImageDraw.Draw(c)
-    y = 16
+    y = Z(16)
     for ln in tl:
-        d.text((20, y), ln, font=font(28, True), fill=TC("#202124"))
-        y += 36
-    d.text((20, y + 2), "%d screens · %d stories" % (ns, len(us)), font=font(19), fill=TC("#5F6368"))
-    mx = 16
+        d.text((Z(20), y), ln, font=font(Z(28), True), fill=TC("#202124"))
+        y += Z(36)
+    d.text((Z(20), y + Z(2)), "%d screens · %d stories" % (ns, len(us)), font=font(Z(19)), fill=TC("#5F6368"))
+    mx = Z(16)
     for v in minis:
-        paste_rgba(c, v["img"], (mx, y + 30))
-        mx += v["size"][0] + 2
+        paste_rgba(c, v["img"], (mx, y + Z(30)))
+        mx += v["size"][0] + Z(2)
     y += MH
-    x = 20
+    x = Z(20)
     for k, n in counts(us).items():
         if n:
             lab = "%d %s" % (n, k)
-            wd = tw(d, lab, font(18, True)) + 20
-            d.rounded_rectangle((x, y + 38, x + wd, y + 70), 6, fill=STATUS[k]["color"])
-            d.text((x + 10, y + 43), lab, font=font(18, True), fill=on_color())
-            x += wd + 8
-    d.rounded_rectangle((0, 0, 419, H - 1), 14, outline=TC("#2D7A5C"), width=4)
+            wd = tw(d, lab, font(Z(18), True)) + Z(20)
+            d.rounded_rectangle((x, y + Z(38), x + wd, y + Z(70)), Z(6), fill=STATUS[k]["color"])
+            d.text((x + Z(10), y + Z(43)), lab, font=font(Z(18), True), fill=on_color())
+            x += wd + Z(8)
+    d.rounded_rectangle((0, 0, CWD - 1, H - 1), Z(14), outline=TC("#2D7A5C"), width=Z(4))
     return c
+
+
+OVERVIEW_BOX = (84, 150)      # a mini screen in an overview card at zoom 1 (points)
 
 
 def layer_columns(keys, edges, maxrows):
@@ -1737,20 +1801,21 @@ def arrow_head(d, p0, p1, color, size=16):
     d.polygon(pts, fill=color)
 
 
-def render_cards(cards, edges, title, sub, out, maxrows=3):
+def render_cards(cards, edges, title, sub, out, maxrows=3, z=1.0):
     """Simple left-to-right layout of pre-rendered card images joined by labelled arrows."""
+    Z = lambda v: max(1, int(round(v * z)))
     keys = list(cards)
     cols = layer_columns(keys, edges, maxrows)
-    GAPX, GAPY, M, TOP = 190, 70, 60, 170
+    GAPX, GAPY, M, TOP = Z(190), Z(70), Z(60), Z(170)
     colw = [max(cards[k].width for k in c) for c in cols]
     colh = [sum(cards[k].height for k in c) + GAPY * (len(c) - 1) for c in cols]
     H = max(colh) + TOP + M
     W = sum(colw) + GAPX * (len(cols) - 1) + 2 * M
     img = Image.new("RGB", (W, H), TH["bg"])
     d = ImageDraw.Draw(img)
-    d.text((M, 36), title, font=font(44, True, True), fill=TC("#202124"))
+    d.text((M, Z(36)), title, font=font(Z(44), True, True), fill=TC("#202124"))
     if sub:
-        d.text((M, 100), sub, font=font(22), fill=TC("#5F6368"))
+        d.text((M, Z(100)), sub, font=font(Z(22)), fill=TC("#5F6368"))
     pos, x = {}, M
     for ci, c in enumerate(cols):
         y = TOP + (max(colh) - colh[ci]) // 2
@@ -1774,18 +1839,18 @@ def render_cards(cards, edges, title, sub, out, maxrows=3):
             else:
                 pts = [(ax + ca_.width // 2, ay), (bx + cb_.width // 2, by + cb_.height)]
         else:
-            top = TOP - 40
+            top = TOP - Z(40)
             pts = [(ax + ca_.width // 2, ay), (ax + ca_.width // 2, top), (bx + cb_.width // 2, top), (bx + cb_.width // 2, by)]
         col = hexrgb(TC("#9AA0A6")) if dashed else ecol
         for p, q in zip(pts, pts[1:]):
             if dashed:
-                n = max(1, int(((q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2) ** 0.5 // 18))
+                n = max(1, int(((q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2) ** 0.5 // Z(18)))
                 for i in range(0, n, 2):
                     d.line((p[0] + (q[0] - p[0]) * i / n, p[1] + (q[1] - p[1]) * i / n,
-                            p[0] + (q[0] - p[0]) * (i + 1) / n, p[1] + (q[1] - p[1]) * (i + 1) / n), fill=col, width=4)
+                            p[0] + (q[0] - p[0]) * (i + 1) / n, p[1] + (q[1] - p[1]) * (i + 1) / n), fill=col, width=Z(4))
             else:
-                d.line((p, q), fill=col, width=4)
-        arrow_head(d, pts[-2], pts[-1], col)
+                d.line((p, q), fill=col, width=Z(4))
+        arrow_head(d, pts[-2], pts[-1], col, Z(16))
         if lab:
             k = used_from[a]
             used_from[a] += 1
@@ -1793,14 +1858,14 @@ def render_cards(cards, edges, title, sub, out, maxrows=3):
             labels.append((pts[0][0] + (pts[-1][0] - pts[0][0]) * f_, pts[0][1] + (pts[-1][1] - pts[0][1]) * f_, lab))
     for k, (x0, y0, _) in pos.items():
         paste_rgba(img, cards[k], (x0, y0))
-    f = font(18, True)
+    f = font(Z(18), True)
     for cx, cy, lab in labels:
-        lines = wrap_px(d, lab, f, 170)
-        w = max(tw(d, l, f) for l in lines) + 14
-        h = 24 * len(lines) + 8
-        d.rounded_rectangle((cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2), 6, fill=TH["bg"], outline=TC("#B7DCCB"))
+        lines = wrap_px(d, lab, f, Z(170))
+        w = max(tw(d, l, f) for l in lines) + Z(14)
+        h = Z(24) * len(lines) + Z(8)
+        d.rounded_rectangle((cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2), Z(6), fill=TH["bg"], outline=TC("#B7DCCB"), width=Z(2))
         for i, l in enumerate(lines):
-            d.text((cx - w / 2 + 7, cy - h / 2 + 4 + i * 24), l, font=f, fill=TC("#1F5A43"))
+            d.text((cx - w / 2 + Z(7), cy - h / 2 + Z(4) + i * Z(24)), l, font=f, fill=TC("#1F5A43"))
     img.save(out, optimize=True)
 
 
@@ -2027,7 +2092,7 @@ def render_tree(cards, edges, title, sub, out, sc=2):
 
 def pil_flow(m, fid, out, tree=True):
     nodes, edges = flow_graph(m, fid)
-    sc = 2 if tree else 1
+    sc = max(2.0, m.get("_zoom_flow", 2.0)) if tree else 1
     cards = collections.OrderedDict()
     for n in nodes:
         cards[n["key"]] = card_screen(m, n["screen"], sc) if n["kind"] == "screen" else card_portal(n["label"], n["kind"][7:], sc)
@@ -2037,10 +2102,11 @@ def pil_flow(m, fid, out, tree=True):
     render_cards(cards, edges, f["title"], f["description"], out)
 
 
-def pil_overview(m, out):
-    cards = collections.OrderedDict((f["id"], card_flow(m, f)) for f in m["flows"])
+def pil_overview(m, out, z=1.0):
+    zt = min(z, 4.0)      # text 4x is already ~100 px tall; the screens stay at native resolution
+    cards = collections.OrderedDict((f["id"], card_flow(m, f, z, zt)) for f in m["flows"])
     edges = [(a, b, lab, lab.startswith("(")) for (a, b), lab in cross_flow_edges(m).items()]
-    render_cards(cards, edges, m["app"]["name"] + " - flows overview", header_line(m), out, maxrows=4)
+    render_cards(cards, edges, m["app"]["name"] + " - flows overview", header_line(m), out, maxrows=4, z=zt)
 
 
 def pil_full(m, out):
@@ -2053,6 +2119,9 @@ def pil_full(m, out):
     if not tmp:
         return False
     W = max(i.width for i in tmp)
+    if W * (sum(i.height for i in tmp) + 40 * len(tmp)) > 300_000_000:    # absurdly large: the flows/ images already hold it all
+        print("  note  flow-map.png skipped (would exceed 300 megapixels at native resolution); see flows/*.png")
+        return False
     img = Image.new("RGB", (W, sum(i.height for i in tmp) + 40 * len(tmp)), TH["bg"])
     y = 0
     for i in tmp:
@@ -2130,51 +2199,50 @@ def dot_architecture(m, thumbs):
     return "\n".join(L + ["}"]) + "\n"
 
 
-def card_compact(m, s):
-    """Small architecture card: title, device frame, status badge (no coloured border)."""
-    dv = screen_device(m, s, (LANDSCAPE_W * ARCH_SCALE * 1.6, PORTRAIT_H * ARCH_SCALE * 1.6), 1)
+ARCH_BOX = (LANDSCAPE_W * ARCH_SCALE * 1.6, PORTRAIT_H * ARCH_SCALE * 1.6)   # device box at zoom 1 (points)
+
+
+def card_compact(m, s, z=1.0):
+    """Small architecture card: title, device frame, status badge (no coloured border). z = zoom (native resolution)."""
+    Z = lambda v: max(1, int(round(v * z)))
+    dv = screen_device(m, s, ARCH_BOX, z)
     w, h = dv["size"]
-    badge = badge_img(s["status"], 0.8, TH["device"]["badge"] == "label")
-    CW = max(w, 150, badge.width) + 16
+    badge = badge_img(s["status"], 0.8 * z, TH["device"]["badge"] == "label")
+    CW = max(w, Z(150), badge.width) + Z(16)
     tmp = ImageDraw.Draw(Image.new("RGB", (10, 10)))
-    fT = font(17, True)
-    tl = wrap_px(tmp, s["title"], fT, CW - 16)
-    CW = int(max(CW, max([tw(tmp, t, fT) for t in tl] or [0]) + 16))  # a long word must never be cut off
-    H = 8 + 22 * len(tl) + 6 + h + 4 + badge.height + 8
+    fT = font(Z(17), True)
+    tl = wrap_px(tmp, s["title"], fT, CW - Z(16))
+    CW = int(max(CW, max([tw(tmp, t, fT) for t in tl] or [0]) + Z(16)))  # a long word must never be cut off
+    H = Z(8) + Z(22) * len(tl) + Z(6) + h + Z(4) + badge.height + Z(8)
     card = Image.new("RGBA", (CW, H), (0, 0, 0, 0))     # transparent: title, device and badge sit on the lane colour
     d = ImageDraw.Draw(card)
-    y = 8
+    y = Z(8)
     for ln in tl:
         d.text((CW // 2, y), ln, font=fT, fill=TC("#202124"), anchor="ma")
-        y += 22
-    y += 6
+        y += Z(22)
+    y += Z(6)
     paste_rgba(card, dv["img"], ((CW - w) // 2, y))
-    paste_rgba(card, badge, ((CW - badge.width) // 2, y + h + 4))
+    paste_rgba(card, badge, ((CW - badge.width) // 2, y + h + Z(4)))
     return card
 
 
-def pil_architecture(m, out):
-    """Fallback renderer: topic bands left to right, compact screen cards inside, cross-topic arrows on top."""
-    rows = [r for r in topic_summary(m) if r["screens"]]
-    if not rows:
-        return
-    GAP, BANDGAP, PAD, HEAD, TOP, ROWS = 26, 170, 28, 110, 150, 3
-    cards = {s["id"]: card_compact(m, s) for r in rows for s in r["screens"]}
-    dtmp = ImageDraw.Draw(Image.new("RGB", (10, 10)))
+def _arch_layout(rows, cards, rn, z, dtmp, m):
+    """Place the topic bands left to right; inside a band the screens fill a grid of `rn` rows. Returns the layout."""
+    Z = lambda v: max(1, int(round(v * z)))
+    GAP, BANDGAP, PAD, HEAD, TOP = Z(26), Z(170), Z(28), Z(110), Z(150)
 
     def _band_sub(r):
         cs = " · ".join("%d %s" % (n, k) for k, n in r["counts"].items() if n)
         return "%d screens · %d stories%s" % (len(r["screens"]), len(r["stories"]), (" · " + cs) if cs else "")
-    pos, bands, x = {}, [], 60
-    maxh = 0
+    pos, bands, x, maxh = {}, [], Z(60), 0
     for r in rows:
         ss = r["screens"]
-        cols = [ss[i:i + ROWS] for i in range(0, len(ss), ROWS)]
+        cols = [ss[i:i + rn] for i in range(0, len(ss), rn)]
         cw = [max(cards[s["id"]].width for s in c) for c in cols]
         bw = sum(cw) + GAP * (len(cols) - 1) + 2 * PAD
         sub = _band_sub(r)
-        bw = int(max(bw, tw(dtmp, r["topic"]["title"], font(30, True, True)) + 2 * PAD,   # a band is never narrower than its heading,
-                     tw(dtmp, sub, font(16)) + 2 * PAD))                                  # so no title is cut off at the edge
+        bw = int(max(bw, tw(dtmp, r["topic"]["title"], font(Z(30), True, True)) + 2 * PAD,   # a band is never narrower than its heading,
+                     tw(dtmp, sub, font(Z(16))) + 2 * PAD))                                  # so no title is cut off at the edge
         bh = max(sum(cards[s["id"]].height for s in c) + GAP * (len(c) - 1) for c in cols) + HEAD + PAD
         cx = x + PAD
         for c, w in zip(cols, cw):
@@ -2183,21 +2251,43 @@ def pil_architecture(m, out):
                 pos[s["id"]] = (cx + (w - cards[s["id"]].width) // 2, y)
                 y += cards[s["id"]].height + GAP
             cx += w + GAP
-        bands.append((r, x, bw, bh))
+        bands.append((r, x, bw, bh, sub))
         x += bw + BANDGAP
         maxh = max(maxh, bh)
-    W, H = x - BANDGAP + 60, TOP + maxh + 60
-    W = int(max(W, 120 + tw(dtmp, m["app"]["name"] + " - architecture by topic", font(44, True, True)),
-                120 + tw(dtmp, header_line(m), font(22))))   # the heading is never cut off either
+    W, H = x - BANDGAP + Z(60), TOP + maxh + Z(60)
+    W = int(max(W, Z(120) + tw(dtmp, m["app"]["name"] + " - architecture by topic", font(Z(44), True, True)),
+                Z(120) + tw(dtmp, header_line(m), font(Z(22)))))   # the heading is never cut off either
+    return dict(pos=pos, bands=bands, W=W, H=H, TOP=TOP, PAD=PAD)
+
+
+def pil_architecture(m, out, z=1.0):
+    """Topic swimlanes left to right, compact screen cards inside, cross-topic arrows on top. Drawn at zoom z, so every
+    screenshot is at >= its native pixels (z from native_zoom). The number of grid rows per lane is chosen for a
+    page that is neither very wide nor very tall. Also writes one full-resolution crop per topic next to `out`."""
+    rows = [r for r in topic_summary(m) if r["screens"]]
+    if not rows:
+        return
+    Z = lambda v: max(1, int(round(v * z)))
+    cards = {s["id"]: card_compact(m, s, z) for r in rows for s in r["screens"]}
+    dtmp = ImageDraw.Draw(Image.new("RGB", (10, 10)))
+    best = None
+    for rn in range(2, 9):                         # how many rows of screens in a lane: aim for a page about 2.1 : 1
+        L = _arch_layout(rows, cards, rn, z, dtmp, m)
+        sc_ = abs(math.log(L["W"] / L["H"]) - math.log(2.1))
+        if best is None or sc_ < best[0]:
+            best = (sc_, L)
+    L = best[1]
+    pos, bands, W, H, TOP, PAD = L["pos"], L["bands"], L["W"], L["H"], L["TOP"], L["PAD"]
     img = Image.new("RGB", (W, H), TH["bg"])
     d = ImageDraw.Draw(img)
-    d.text((60, 36), m["app"]["name"] + " - architecture by topic", font=font(44, True, True), fill=TC("#202124"))
-    d.text((60, 96), header_line(m), font=font(22), fill=TC("#5F6368"))
-    for r, bx, bw, bh in bands:
+    d.text((Z(60), Z(36)), m["app"]["name"] + " - architecture by topic", font=font(Z(44), True, True), fill=TC("#202124"))
+    d.text((Z(60), Z(96)), header_line(m), font=font(Z(22)), fill=TC("#5F6368"))
+    for r, bx, bw, bh, sub in bands:
         tp = r["topic"]
-        d.rounded_rectangle((bx, TOP, bx + bw, TOP + bh), 28, fill=tint(tp["color"], 0.93), outline=tp["color"], width=5)
-        d.text((bx + PAD, TOP + 16), tp["title"], font=font(30, True, True), fill=tp["color"])
-        d.text((bx + PAD, TOP + 62), _band_sub(r), font=font(16), fill=TC("#5F6368"))
+        d.rounded_rectangle((bx, TOP, bx + bw, TOP + bh), Z(28), fill=tint(tp["color"], 0.93), outline=tp["color"], width=Z(5))
+        d.text((bx + PAD, TOP + Z(16)), tp["title"], font=font(Z(30), True, True), fill=tp["color"])
+        d.text((bx + PAD, TOP + Z(62)), sub, font=font(Z(16)), fill=TC("#5F6368"))
+
     def anchor(a, b):
         (ax, ay), (bx_, by_) = pos[a], pos[b]
         ca, cb = cards[a], cards[b]
@@ -2219,14 +2309,14 @@ def pil_architecture(m, out):
             else:
                 lines.append((p, q, e))
     for p, q, e in lines:  # inside a topic: thin grey, drawn behind the cards
-        d.line((p, q), fill=TC("#9AA0A6"), width=3)
+        d.line((p, q), fill=TC("#9AA0A6"), width=Z(3))
     for p, q, e, col in cross:  # between topics: thick, topic coloured, also behind the cards (visible in the gaps)
-        d.line((p, q), fill=hexrgb(col), width=6)
+        d.line((p, q), fill=hexrgb(col), width=Z(6))
     for sid, (cx, cy) in pos.items():
         paste_rgba(img, cards[sid], (cx, cy))
     for p, q, e in lines:
-        arrow_head(d, p, q, TC("#9AA0A6"), 12)
-    f = font(16, True)
+        arrow_head(d, p, q, TC("#9AA0A6"), Z(12))
+    f = font(Z(16), True)
     placed = []
 
     def free(pt, w, h):
@@ -2237,11 +2327,11 @@ def pil_architecture(m, out):
         return True
     for p, q, e, col in cross:
         c = hexrgb(col)
-        arrow_head(d, p, q, c, 22)
+        arrow_head(d, p, q, c, Z(22))
         if e["label"]:
-            lines_ = wrap_px(d, e["label"], f, 180)[:2]
-            w = max(tw(d, l, f) for l in lines_) + 14
-            h = 22 * len(lines_) + 8
+            lines_ = wrap_px(d, e["label"], f, Z(180))[:2]
+            w = max(tw(d, l, f) for l in lines_) + Z(14)
+            h = Z(22) * len(lines_) + Z(8)
             spot = None
             for tpos in (0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.18, 0.82, 0.5):
                 pt = (p[0] + (q[0] - p[0]) * tpos, p[1] + (q[1] - p[1]) * tpos)
@@ -2252,56 +2342,66 @@ def pil_architecture(m, out):
                 spot = ((p[0] + q[0]) / 2, (p[1] + q[1]) / 2)
             mx, my = spot
             placed.append((mx - w / 2, my - h / 2, mx + w / 2, my + h / 2))
-            d.rounded_rectangle((mx - w / 2, my - h / 2, mx + w / 2, my + h / 2), 6, fill=TH["bg"], outline=col, width=2)
+            d.rounded_rectangle((mx - w / 2, my - h / 2, mx + w / 2, my + h / 2), Z(6), fill=TH["bg"], outline=col, width=Z(2))
             for i, l in enumerate(lines_):
-                d.text((mx - w / 2 + 7, my - h / 2 + 4 + i * 22), l, font=f, fill=col)
+                d.text((mx - w / 2 + Z(7), my - h / 2 + Z(4) + i * Z(22)), l, font=f, fill=col)
     img.save(out, optimize=True)
-    return dict(cards={sid: pos[sid] + cards[sid].size for sid in pos}, bands=[(r["topic"]["id"], bx, TOP, bw, bh) for r, bx, bw, bh in bands])
+    tdir = os.path.splitext(out)[0]            # architecture/<topic>.png: one full-resolution crop per topic lane
+    shutil.rmtree(tdir, ignore_errors=True)
+    os.makedirs(tdir, exist_ok=True)
+    for r, bx, bw, bh, sub in bands:
+        pad = Z(20)
+        img.crop((max(0, bx - pad), max(0, TOP - pad), min(W, bx + bw + pad), min(H, TOP + bh + pad))).save(
+            os.path.join(tdir, r["topic"]["id"] + ".png"), optimize=True)
+    return dict(cards={sid: pos[sid] + cards[sid].size for sid in pos},
+                bands=[(r["topic"]["id"], bx, TOP, bw, bh) for r, bx, bw, bh, sub in bands])
 
 
 def gen_diagrams(m, gen, use_graphviz=True):
-    """flows/<id>.png, overview.png, flow-map.png (+ dot sources in dot/). Returns notes for the summary."""
+    """flows/<id>.png, overview.png, flow-map.png, architecture.png (+ architecture/<topic>.png). With Pillow every
+    screenshot is drawn at >= native pixels (see native_zoom). Returns notes for the summary."""
     notes = []
     if not HAVE_PIL and not (use_graphviz and shutil.which("dot")):
         return ["skipped diagrams (need Pillow or Graphviz)"]
+    set_diagram("thumbs")
     thumbs = make_thumbs(m, gen)
     dotdir = os.path.join(gen, "dot")
-    gv = use_graphviz and shutil.which("dot")
-    jobs = [("overview", dot_overview(m, thumbs), os.path.join(gen, "overview.png"), 130)]
-    if not HAVE_PIL:   # with Pillow the flows are drawn as aligned trees by the built-in renderer (see render_tree)
-        jobs += [(f["id"], dot_flow(m, f["id"], thumbs), os.path.join(gen, "flows", f["id"] + ".png"), 144) for f in m["flows"]]
-    jobs += [("flow-map", dot_full(m, thumbs), os.path.join(gen, "flow-map.png"), 96)]
+    gv = use_graphviz and shutil.which("dot") and not HAVE_PIL    # Graphviz draws screenshots small: only without Pillow
     os.makedirs(os.path.join(gen, "flows"), exist_ok=True)
-    if gv:
-        for name, text, png, dpi in jobs:
-            write(os.path.join(dotdir, name + ".dot"), dot_text(text))
-            if not run_dot(os.path.join(dotdir, name + ".dot"), png, dpi):
-                gv = False
-                notes.append("graphviz failed on %s; using the Pillow renderer" % name)
-                break
-    else:
+    if HAVE_PIL:
+        del RES_LOG[:]
         shutil.rmtree(dotdir, ignore_errors=True)
-        notes.append("Graphviz not used; diagrams drawn by the built-in Pillow renderer"
-                     if HAVE_PIL else "")
-    if not gv:
-        if not HAVE_PIL:
-            return notes + ["skipped diagrams (no Graphviz, no Pillow)"]
-        pil_overview(m, os.path.join(gen, "overview.png"))
-        pil_full(m, os.path.join(gen, "flow-map.png"))
-    if HAVE_PIL:
+        zf = m["_zoom_flow"] = native_zoom(m, (LANDSCAPE_W, PORTRAIT_H), 2.0)
+        za = native_zoom(m, ARCH_BOX)
+        zo = native_zoom(m, OVERVIEW_BOX)
+        set_diagram("overview")
+        pil_overview(m, os.path.join(gen, "overview.png"), zo)
+        _DEV_CACHE.clear()           # native-size device images are large: do not keep them between diagrams
         for f in m["flows"]:
-            try:
-                os.remove(os.path.join(dotdir, f["id"] + ".dot"))     # stale Graphviz source of an earlier layout
-            except OSError:
-                pass
+            set_diagram("flows/" + f["id"])
             pil_flow(m, f["id"], os.path.join(gen, "flows", f["id"] + ".png"))
-    # The architecture picture uses the built-in swimlane renderer (compact, predictable); Graphviz only without Pillow.
-    if HAVE_PIL:
-        pil_architecture(m, os.path.join(gen, "architecture.png"))
-    elif gv:
-        write(os.path.join(dotdir, "architecture.dot"), dot_text(dot_architecture(m, thumbs)))
-        run_dot(os.path.join(dotdir, "architecture.dot"), os.path.join(gen, "architecture.png"), 110)
-    return [n for n in notes if n]
+        _DEV_CACHE.clear()
+        set_diagram("flow-map")
+        fm = os.path.join(gen, "flow-map.png")
+        if os.path.isfile(fm):
+            os.remove(fm)              # never leave a stale (smaller, older) all-in-one image next to the new ones
+        pil_full(m, fm)
+        set_diagram("architecture")
+        pil_architecture(m, os.path.join(gen, "architecture.png"), za)
+        _DEV_CACHE.clear()
+        set_diagram("other")
+        notes.append("diagrams at native screenshot resolution (zoom: flows %.1fx, architecture %.1fx, overview %.1fx)" % (zf, za, zo))
+        return notes
+    jobs = [("overview", dot_overview(m, thumbs), os.path.join(gen, "overview.png"), 130),
+            ("flow-map", dot_full(m, thumbs), os.path.join(gen, "flow-map.png"), 96)]
+    jobs += [(f["id"], dot_flow(m, f["id"], thumbs), os.path.join(gen, "flows", f["id"] + ".png"), 144) for f in m["flows"]]
+    for name, text, png, dpi in jobs:
+        write(os.path.join(dotdir, name + ".dot"), dot_text(text))
+        if not run_dot(os.path.join(dotdir, name + ".dot"), png, dpi):
+            return notes + ["graphviz failed on %s" % name]
+    write(os.path.join(dotdir, "architecture.dot"), dot_text(dot_architecture(m, thumbs)))
+    run_dot(os.path.join(dotdir, "architecture.dot"), os.path.join(gen, "architecture.png"), 110)
+    return [n for n in notes if n] + ["Graphviz without Pillow: screenshots are not at native resolution (install Pillow)"]
 
 
 # --------------------------------------------------------------------------- single-file HTML viewer
@@ -2551,48 +2651,80 @@ def gen_html(m, gen):
 
 
 # --------------------------------------------------------------------------- PDF one-pager
+def topic_schematic(m, d, x0, y0, w, h, Z):
+    """Screenshot-free topic map for the one-pager: one box per topic (swimlane order), arrows for cross-topic navigation
+    with the number of links. Drawn inside (x0, y0, x0 + w, y0 + h) in design units, scaled by Z."""
+    rows = [r for r in topic_summary(m) if r["screens"]]
+    n = len(rows)
+    if not n:
+        return
+    gap = 26
+    bw = (w - gap * (n - 1)) / n
+    arc_h = min(h - 120, 40 + 34 * max(1, n // 2))
+    by = y0 + arc_h
+    bh = h - arc_h
+    centre = {}
+    f1, f2 = font(Z(19), True), font(Z(15))
+    for i, r in enumerate(rows):
+        tp = r["topic"]
+        x = x0 + i * (bw + gap)
+        centre[tp["id"]] = x + bw / 2
+        d.rounded_rectangle((Z(x), Z(by), Z(x + bw), Z(by + bh)), Z(14), fill=tint(tp["color"], 0.9), outline=tp["color"], width=Z(4))
+        ls = wrap_px(d, tp["title"], f1, Z(bw - 20))[:3]
+        for k, ln in enumerate(ls):
+            d.text((Z(x + 12), Z(by + 10 + k * 24)), ln, font=f1, fill=TC("#202124"))
+        d.text((Z(x + 12), Z(by + bh - 30)), "%d screens · %d stories" % (len(r["screens"]), len(r["stories"])), font=f2, fill=TC("#5F6368"))
+        yy = by + 12 + 24 * len(ls)
+        for k_, n_ in r["counts"].items():
+            if n_ and yy < by + bh - 40:
+                d.ellipse((Z(x + 12), Z(yy + 3), Z(x + 24), Z(yy + 15)), fill=STATUS[k_]["color"])
+                d.text((Z(x + 32), Z(yy)), "%d %s" % (n_, STATUS[k_]["label"].lower()), font=f2, fill=TC("#3C4043"))
+                yy += 22
+    pairs = collections.Counter({k: len(v) for k, v in cross_topic_edges(m).items()})
+    order = sorted(pairs, key=lambda k: abs(centre.get(k[0], 0) - centre.get(k[1], 0)))
+    for lvl, (a, b) in enumerate(order):
+        if a not in centre or b not in centre:
+            continue
+        col = hexrgb(m["T"][a]["color"]) if a in m["T"] else hexrgb(TH["primary"])
+        off = (-1 if centre[b] < centre[a] else 1) * 10
+        ya = by - (14 + (lvl % max(1, (arc_h - 20) // 18)) * 18)
+        xa, xb = centre[a] + off, centre[b] + off
+        for (p, q) in (((xa, by), (xa, ya)), ((xa, ya), (xb, ya)), ((xb, ya), (xb, by - 4))):
+            d.line((Z(p[0]), Z(p[1]), Z(q[0]), Z(q[1])), fill=col, width=Z(4))
+        arrow_head(d, (Z(xb), Z(ya)), (Z(xb), Z(by)), col, Z(14))
+        if pairs[(a, b)] > 1:
+            d.text((Z((xa + xb) / 2), Z(ya - 12)), "x%d" % pairs[(a, b)], font=f2, fill=col, anchor="mm")
+
+
 def gen_onepager(m, gen):
+    """One page: status counts, topic map, topic table, top gaps and a contact sheet of every screen. Drawn at a zoom Z
+    chosen so that every screenshot in the contact sheet is at >= its native pixels; the page grows downwards as needed."""
     if not HAVE_PIL:
         return "skipped one-pager (needs Pillow)"
-    W, H, M = 2480, 1754, 70  # A3 landscape at 150 dpi
-    img = Image.new("RGB", (W, H), TH["bg"])
-    d = ImageDraw.Draw(img)
-    d.text((M, 40), m["app"]["name"] + " - story map", font=font(64, True, True), fill=TC("#202124"))
-    sub = header_line(m) + ("   |   " + m["app"]["summary"] if m["app"]["summary"] else "")
-    while len(sub) > 3 and tw(d, sub, font(26)) > W - 2 * M:
-        sub = sub[:-4].rstrip() + "..."
-    d.text((M, 120), sub, font=font(26), fill=TC("#5F6368"))
-    # status boxes
-    c = counts(m["stories"])
-    total = max(1, len(m["stories"]))
-    x, y = M, 180
-    for k, n in c.items():
-        d.rounded_rectangle((x, y, x + 330, y + 110), 16, fill=STATUS[k]["color"])
-        d.text((x + 20, y + 8), str(n), font=font(60, True), fill=on_color())
-        d.text((x + 120, y + 22), STATUS[k]["label"], font=font(28, True), fill=on_color())
-        d.text((x + 120, y + 62), "%d%% of stories" % round(100 * n / total), font=font(22), fill=on_color())
-        x += 350
-    d.text((x + 20, y + 20), "%d stories · %d screens · %d flows · %d personas" % (
-        len(m["stories"]), len(m["screens"]), len(m["flows"]), len(m["personas"])), font=font(28), fill=TC("#202124"))
-    d.text((x + 20, y + 64), "Built = verified in code or on a running app. Unverified = not checked yet.", font=font(22), fill=TC("#5F6368"))
-    # architecture diagram (left), topic table + top gaps (right), contact sheet of every screen below
+    _DEV_CACHE.clear()
+    th = 300                                                        # design height of a screen on the sheet
+    zz = native_zoom(m, (10 ** 5, th))                              # pixels per design unit
+    Z = lambda v: max(1, int(round(v * zz)))
+    W0, H0, M = 2480, 1754, 70                                      # A3 landscape at 150 dpi (design units), height grows
+    set_diagram("one-pager")
+    dm = ImageDraw.Draw(Image.new("RGB", (10, 10)))
     top = 320
     RX = 1640
-    arch = os.path.join(gen, "architecture.png")
-    arch_im = Image.open(arch).convert("RGB") if os.path.isfile(arch) else None
     blocks = [(r["topic"]["title"], list(r["screens"]), r["topic"]["color"]) for r in topic_summary(m) if r["screens"]]
     shots = {s["id"]: load_img(m, s) for _, ss, _ in blocks for s in ss}
-    sheet_w = W - 2 * M
+    sheet_w = W0 - 2 * M
     SEG_MIN, GAPX, LABEL_H, TITLE_H = 210, 14, 56, 36   # a title needs some width; room for title above and label below
 
-    def sheet_rows(th):
-        """Lay the screens out at thumbnail height th: each at its own aspect ratio, topics wrap onto new rows."""
+    def dev_w(s, im):   # device width (design units) of screen s at sheet height th
+        return min(device_box_width(m, s, im, th * zz) / zz, sheet_w)
+
+    def sheet_rows():
+        """Lay the screens out at height th: each at its own aspect ratio, topics wrap onto new rows."""
         rows, x = [[]], 0
         for title, ss, tcol in blocks:
             seg = None
             for s in ss:
-                im = shots[s["id"]]
-                w = min(device_box_width(m, s, im, th), sheet_w)
+                w = dev_w(s, shots[s["id"]])
                 need = (GAPX if seg and seg["ws"] else 0) + w
                 if seg is None or x + need > sheet_w:
                     if seg is not None or x + 40 + max(w, SEG_MIN) > sheet_w:
@@ -2611,118 +2743,116 @@ def gen_onepager(m, gen):
             if seg is not None:
                 x = max(x, seg["x0"] + SEG_MIN)
         return rows
-
-    def best_sheet(avail):
-        for th in range(360, 47, -4):
-            rows = sheet_rows(th)
-            if len(rows) * (th + TITLE_H + LABEL_H) <= avail:
-                return th, rows
-        return 48, sheet_rows(48)
-
+    rows = sheet_rows()
     n_topics = len(topic_summary(m))
-    right_min = 78 + n_topics * max(24, min(38, 270 // max(1, n_topics))) + 60 + (110 if m["gaps"] else 30)  # topic table + the top gap(s)
-    # choose how tall the architecture band is so that the architecture and the screen thumbnails are both as big as possible
-    foot = H - 100
-    best = None
-    for AH in range(800, 399, -40):
-        if arch_im is not None:
-            r = min((RX - M - 50) / arch_im.width, AH / arch_im.height)
-            ah = int(arch_im.height * r)
-        else:
-            ah = 0
-        reg = max(ah, right_min)
-        th, rows = best_sheet(foot - (top + 50 + reg + 40 + 50))
-        score = th * max(ah, 300)
-        if best is None or score > best[0]:
-            best = (score, AH, reg, th, rows)
-    _, AH, reg, th, rows = best
-    d.text((M, top), "Architecture (topics and how they connect)", font=font(30, True, True), fill=TC("#202124"))
-    if arch_im is not None:
-        r = min((RX - M - 50) / arch_im.width, AH / arch_im.height)
-        o = arch_im.resize((max(1, int(arch_im.width * r)), max(1, int(arch_im.height * r))), Image.LANCZOS)
-        img.paste(o, (M, top + 50))
-        d.rectangle((M, top + 50, M + o.width, top + 50 + o.height), outline=TC("#DADCE0"), width=2)
+    right_min = 78 + n_topics * max(24, min(38, 270 // max(1, n_topics))) + 60 + (110 if m["gaps"] else 30)
+    reg = max(420, right_min)                                        # height of the topic map / table block
+    sy = top + 50 + reg + 40
+    body_h = sy + 50 + len(rows) * (th + TITLE_H + LABEL_H)
+    H = max(H0, body_h + 110)
+    img = Image.new("RGB", (Z(W0), Z(H)), TH["bg"])
+    d = ImageDraw.Draw(img)
+    d.text((Z(M), Z(40)), m["app"]["name"] + " - story map", font=font(Z(64), True, True), fill=TC("#202124"))
+    sub = header_line(m) + ("   |   " + m["app"]["summary"] if m["app"]["summary"] else "")
+    while len(sub) > 3 and tw(d, sub, font(Z(26))) > Z(W0 - 2 * M):
+        sub = sub[:-4].rstrip() + "..."
+    d.text((Z(M), Z(120)), sub, font=font(Z(26)), fill=TC("#5F6368"))
+    c = counts(m["stories"])
+    total = max(1, len(m["stories"]))
+    x, y = M, 180
+    for k, n in c.items():
+        d.rounded_rectangle((Z(x), Z(y), Z(x + 330), Z(y + 110)), Z(16), fill=STATUS[k]["color"])
+        d.text((Z(x + 20), Z(y + 8)), str(n), font=font(Z(60), True), fill=on_color())
+        d.text((Z(x + 120), Z(y + 22)), STATUS[k]["label"], font=font(Z(28), True), fill=on_color())
+        d.text((Z(x + 120), Z(y + 62)), "%d%% of stories" % round(100 * n / total), font=font(Z(22)), fill=on_color())
+        x += 350
+    d.text((Z(x + 20), Z(y + 20)), "%d stories · %d screens · %d flows · %d personas" % (
+        len(m["stories"]), len(m["screens"]), len(m["flows"]), len(m["personas"])), font=font(Z(28)), fill=TC("#202124"))
+    d.text((Z(x + 20), Z(y + 64)), "Built = verified in code or on a running app. Unverified = not checked yet.", font=font(Z(22)), fill=TC("#5F6368"))
+    d.text((Z(M), Z(top)), "Topics and how they connect (screens: see architecture.png)", font=font(Z(30), True, True), fill=TC("#202124"))
+    topic_schematic(m, d, M, top + 50, RX - M - 50, reg, Z)
     tx = RX
-    tbl_w = W - M - RX
+    tbl_w = W0 - M - RX
     cols = [("Topic", 0), ("Scr.", 262), ("Stor.", 330)] + [(STATUS[k]["label"].replace("Unverified", "Unver.").replace("Partly built", "Partly"), 410 + 88 * i) for i, k in enumerate(STATUS)]
-    d.text((tx, top), "Topics", font=font(30, True, True), fill=TC("#202124"))
+    d.text((Z(tx), Z(top)), "Topics", font=font(Z(30), True, True), fill=TC("#202124"))
     ty = top + 50
     for name, off in cols:
-        d.text((tx + 14 + off, ty), name, font=font(16, True), fill=TC("#5F6368"))
+        d.text((Z(tx + 14 + off), Z(ty)), name, font=font(Z(16), True), fill=TC("#5F6368"))
     ty += 28
     rows_t = topic_summary(m)
     rh = max(24, min(38, 270 // max(1, len(rows_t))))
     for r in rows_t:
         tp = r["topic"]
-        d.rounded_rectangle((tx, ty, tx + tbl_w, ty + rh - 4), 8, fill=tint(tp["color"], 0.9))
-        d.rectangle((tx, ty, tx + 12, ty + rh - 4), fill=tp["color"])
+        d.rounded_rectangle((Z(tx), Z(ty), Z(tx + tbl_w), Z(ty + rh - 4)), Z(8), fill=tint(tp["color"], 0.9))
+        d.rectangle((Z(tx), Z(ty), Z(tx + 12), Z(ty + rh - 4)), fill=tp["color"])
         fz = 20 if rh >= 34 else 17
         yy = ty + (rh - fz) // 2 - 4
         title = tp["title"]
-        while len(title) > 3 and tw(d, title, font(fz, True)) > 235:
+        while len(title) > 3 and tw(d, title, font(Z(fz), True)) > Z(235):
             title = title[:-4].rstrip() + "..."
-        d.text((tx + 26, yy), title, font=font(fz, True), fill=TC("#202124"))
-        d.text((tx + 14 + 262, yy), str(len(r["screens"])), font=font(fz), fill=TC("#202124"))
-        d.text((tx + 14 + 330, yy), str(len(r["stories"])), font=font(fz), fill=TC("#202124"))
+        d.text((Z(tx + 26), Z(yy)), title, font=font(Z(fz), True), fill=TC("#202124"))
+        d.text((Z(tx + 14 + 262), Z(yy)), str(len(r["screens"])), font=font(Z(fz)), fill=TC("#202124"))
+        d.text((Z(tx + 14 + 330), Z(yy)), str(len(r["stories"])), font=font(Z(fz)), fill=TC("#202124"))
         for i, k in enumerate(STATUS):
             n = r["counts"].get(k, 0)
-            d.text((tx + 14 + 410 + 88 * i, yy), str(n), font=font(fz, bool(n)), fill=STATUS[k]["color"] if n else TC("#9AA0A6"))
+            d.text((Z(tx + 14 + 410 + 88 * i), Z(yy)), str(n), font=font(Z(fz), bool(n)), fill=STATUS[k]["color"] if n else TC("#9AA0A6"))
         ty += rh
     gy0 = ty + 40
-    d.text((tx, gy0), "Top gaps and risks", font=font(30, True, True), fill=TC("#202124"))
+    d.text((Z(tx), Z(gy0)), "Top gaps and risks", font=font(Z(30), True, True), fill=TC("#202124"))
     gy = gy0 + 50
     order = {s: i for i, s in enumerate(SEVERITIES)}
     for g in sorted(m["gaps"], key=lambda g: order.get(g["severity"], 9))[:8]:
         colr = TH["sev"].get(g["severity"], "#999999")
-        lines = wrap_px(d, g["title"], font(22, True), tbl_w - 40)[:2]
+        lines = wrap_px(d, g["title"], font(Z(22), True), Z(tbl_w - 40))[:2]
         if gy + 50 + 28 * len(lines) > top + 50 + reg:
             break
-        d.rounded_rectangle((tx, gy + 2, tx + 12, gy + 28 + 28 * len(lines)), 4, fill=colr)
-        d.text((tx + 26, gy), "%s  |  %s severity" % (g["id"], g["severity"]), font=font(18), fill=TC("#5F6368"))
+        d.rounded_rectangle((Z(tx), Z(gy + 2), Z(tx + 12), Z(gy + 28 + 28 * len(lines))), Z(4), fill=colr)
+        d.text((Z(tx + 26), Z(gy)), "%s  |  %s severity" % (g["id"], g["severity"]), font=font(Z(18)), fill=TC("#5F6368"))
         for i, ln in enumerate(lines):
-            d.text((tx + 26, gy + 26 + i * 28), ln, font=font(22, True), fill=TC("#202124"))
+            d.text((Z(tx + 26), Z(gy + 26 + i * 28)), ln, font=font(Z(22), True), fill=TC("#202124"))
         gy += 50 + 28 * len(lines)
     if not m["gaps"]:
-        d.text((tx, gy), "None recorded.", font=font(24), fill=TC("#5F6368"))
-    sy = top + 50 + reg + 40
-    d.text((M, sy), "Screens by topic (device frames; the dot under each shows its status)", font=font(30, True, True), fill=TC("#202124"))
+        d.text((Z(tx), Z(gy)), "None recorded.", font=font(Z(24)), fill=TC("#5F6368"))
+    d.text((Z(M), Z(sy)), "Screens by topic (device frames at native resolution; the dot under each shows its status)", font=font(Z(30), True, True), fill=TC("#202124"))
     sy += 50
-    fl = font(15)
+    fl = font(Z(15))
     for ri, row in enumerate(rows):
         base_y = sy + ri * (th + TITLE_H + LABEL_H)
         for seg in row:
             ttl = seg["title"] + (" (cont.)" if seg["cont"] else "")
             nxt = [sg["x0"] for sg in row if sg["x0"] > seg["x0"]]
             span = (min(nxt) if nxt else sheet_w) - seg["x0"] - 14      # the title may use all the room up to the next block
-            while len(ttl) > 3 and tw(d, ttl, font(22, True)) > span:
+            while len(ttl) > 3 and tw(d, ttl, font(Z(22), True)) > Z(span):
                 ttl = ttl[:-4].rstrip() + "..."
-            d.text((M + seg["x0"], base_y), ttl, font=font(22, True), fill=seg["tcol"])
+            d.text((Z(M + seg["x0"]), Z(base_y)), ttl, font=font(Z(22), True), fill=seg["tcol"])
             cx = M + seg["x0"]
             for s, w in zip(seg["ss"], seg["ws"]):
                 yy = base_y + TITLE_H
-                dv = screen_device(m, s, (w, th), 1)           # the whole screenshot inside its device frame, aspect preserved
-                px, py = cx + (w - dv["size"][0]) // 2, yy + (th - dv["size"][1]) // 2
+                dv = screen_device(m, s, (w, th), zz)           # the whole screenshot inside its device frame, aspect preserved
+                px, py = Z(cx) + (Z(w) - dv["size"][0]) // 2, Z(yy) + (Z(th) - dv["size"][1]) // 2
                 img.paste(dv["img"], (px, py), dv["img"])
                 lab = s["title"]
-                if tw(d, lab, fl) > w + 10:
-                    while len(lab) > 1 and tw(d, lab + "...", fl) > w + 10:
+                if tw(d, lab, fl) > Z(w + 10):
+                    while len(lab) > 1 and tw(d, lab + "...", fl) > Z(w + 10):
                         lab = lab[:-1]
                     lab = lab.rstrip() + "..."
-                d.text((cx, yy + th + 8), lab, font=fl, fill=TC("#3C4043"))
+                d.text((Z(cx), Z(yy + th + 8)), lab, font=fl, fill=TC("#3C4043"))
                 stv = STATUS[s["status"]]            # status badge: a dot (and a label) under the device, no coloured border
-                d.ellipse((cx, yy + th + 32, cx + 13, yy + th + 45), fill=stv["color"])
+                d.ellipse((Z(cx), Z(yy + th + 32), Z(cx + 13), Z(yy + th + 45)), fill=stv["color"])
                 if TH["device"]["badge"] == "label":
-                    d.text((cx + 20, yy + th + 38), stv["label"], font=fl, fill=TC("#5F6368"), anchor="lm")
+                    d.text((Z(cx + 20), Z(yy + th + 38)), stv["label"], font=fl, fill=TC("#5F6368"), anchor="lm")
                 cx += w + GAPX
     if m["app"]["disclaimer"]:
         dis = m["app"]["disclaimer"]
-        while len(dis) > 3 and tw(d, dis, font(20)) > W - 2 * M:
+        while len(dis) > 3 and tw(d, dis, font(Z(20))) > Z(W0 - 2 * M):
             dis = dis[:-4].rstrip() + "..."
-        d.text((M, H - 80), dis, font=font(20), fill=TC("#3C4043"))
-    d.text((M, H - 44), "Generated by storymap.py from stories.yaml - edit the source, not this file.", font=font(18), fill=TC("#80868B"))
+        d.text((Z(M), Z(H - 80)), dis, font=font(Z(20)), fill=TC("#3C4043"))
+    d.text((Z(M), Z(H - 44)), "Generated by storymap.py from stories.yaml - edit the source, not this file.", font=font(Z(18)), fill=TC("#80868B"))
+    set_diagram("other")
     png = os.path.join(gen, "one-pager.png")
     img.save(png, optimize=True)
-    img.save(os.path.join(gen, "one-pager.pdf"), "PDF", resolution=150.0)
+    img.save(os.path.join(gen, "one-pager.pdf"), "PDF", resolution=150.0 * zz)
+    _DEV_CACHE.clear()
     return ""
 
 
@@ -3290,7 +3420,8 @@ def cmd_build(a):
         done += ["story-map.md", "mermaid/*.mmd"]
     if want("diagrams"):
         notes = gen_diagrams(m, gen, use_graphviz=not a.no_graphviz)
-        done += ["architecture.png", "overview.png", "flows/*.png", "flow-map.png"] if not any("skipped" in n for n in notes) else []
+        done += ["architecture.png", "overview.png", "flows/*.png"] + (["flow-map.png"] if os.path.isfile(os.path.join(gen, "flow-map.png")) else []) \
+            if not any("skipped" in n for n in notes) else []
         for n in notes:
             print("  note  " + n)
     if want("html"):

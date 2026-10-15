@@ -46,10 +46,10 @@ Where one screen leads to several screens, the flow diagram draws a tree: a sing
 ## What you get
 | Output (in `generated/`) | |
 |---|---|
-| `architecture.png` | screens (in device frames) grouped in topic swimlanes, cross-topic arrows, topic summary on the one-pager |
+| `architecture.png` (+ `architecture/<topic>.png`) | screens (in device frames) grouped in topic swimlanes, cross-topic arrows; one full-resolution crop per topic |
 | `story-map.html` | one self-contained file; Architecture tab, topic/status/persona filters, search, click-to-enlarge screens |
-| `one-pager.pdf` / `.png` | A3 overview: status counts, topic table, architecture, top gaps, every screen |
-| `flows/<flow>.png`, `overview.png`, `flow-map.png` | diagrams with real screenshots as nodes, arrows labelled with the action; branches drawn as aligned trees |
+| `one-pager.pdf` / `.png` | overview page: status counts, topic map and table, top gaps, every screen at native resolution (page grows with the map) |
+| `flows/<flow>.png`, `overview.png`, `flow-map.png` (omitted when it would exceed 300 megapixels; the flows hold the same content) | diagrams with real screenshots as nodes, arrows labelled with the action; branches drawn as aligned trees |
 | `story-map.md` + `mermaid/*.mmd` | topic table + Mermaid architecture; renders directly on GitHub |
 | `user-stories.md` / `.csv`, `gaps-and-risks.md` | stories grouped by topic (Topic column in the csv), risks by severity |
 
@@ -79,3 +79,7 @@ Screenshots and stories end up in your repo. Capture with a demo account and fak
 
 ## License
 MIT - see [LICENSE](LICENSE). Example screenshots show third-party content under its own terms (see the example's README).
+
+## Resolution: zoom reads every word
+
+Every screenshot in `architecture.png`, `overview.png`, `flows/*.png` and `one-pager.png`/`.pdf` is drawn at **at least its native pixels** (scale ≥ 1.0×): the canvas is scaled up, never the screens down, so you can zoom into any device and read all of its text. A 780×1688 px phone screenshot therefore appears at ≥ 780×1688 px, which makes big files (tens to hundreds of megapixels; PNGs of roughly 1–30 MB because UI screenshots compress well). Pillow's pixel limit is lifted for these files. `architecture/<topic>.png` holds one full-resolution crop per topic lane for easier viewing, and `story-map.html` embeds reduced copies, so use the PNGs for full detail. `build` prints the zoom factors it used and warns if any screenshot would be rendered below 1.0×; the test suite (`tests/test_storymap.py::TestResolution`) checks it. Capture screenshots sharp (web: `--scale 2`).
