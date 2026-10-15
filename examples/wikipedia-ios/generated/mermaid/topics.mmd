@@ -1,24 +1,24 @@
-%%{init: {"theme":"base","themeVariables":{"fontFamily":"Helvetica","fontSize":"16px","primaryColor":"#FFFFFF","primaryTextColor":"#202122","primaryBorderColor":"#3366CC","lineColor":"#3366CC","secondaryColor":"#F8F9FA","tertiaryColor":"#F0F2F4"}}}%%
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Helvetica","fontSize":"16px","primaryColor":"#000000","primaryTextColor":"#EAECF0","primaryBorderColor":"#719DF4","lineColor":"#719DF4","secondaryColor":"#101418","tertiaryColor":"#1A1A1A"}}}%%
 flowchart LR
   n_t_onboarding["<b>Onboarding</b><br/>6 screens · 6 stories<br/>5 built · 1 unverified"]
-  n_t_access["<b>Login & account access</b><br/>2 screens · 3 stories<br/>2 built · 1 unverified"]
-  n_t_journey["<b>Main user journey</b><br/>9 screens · 11 stories<br/>9 built · 2 unverified"]
-  n_t_library["<b>Content & library</b><br/>5 screens · 5 stories<br/>4 built · 1 unverified"]
-  n_t_settings["<b>Settings & account</b><br/>6 screens · 3 stories<br/>2 built · 1 unverified"]
-  n_t_payments["<b>Donations</b><br/>1 screens · 1 stories<br/>1 partly"]
+  n_t_access["<b>Login & account access</b><br/>2 screens · 1 stories<br/>1 built"]
+  n_t_journey["<b>Main user journey</b><br/>9 screens · 12 stories<br/>9 built · 3 unverified"]
+  n_t_library["<b>Content & library</b><br/>5 screens · 4 stories<br/>3 built · 1 unverified"]
+  n_t_settings["<b>Settings & account</b><br/>3 screens · 4 stories<br/>2 built · 1 partly · 1 unverified"]
+  n_t_payments["<b>Donations</b><br/>1 screens · 0 stories<br/>no stories"]
   n_t_support["<b>Support & legal</b><br/>1 screens · 0 stories<br/>no stories"]
-  n_t_onboarding ==>|"Tap Next (onboarding complete)"| n_t_journey
+  n_t_onboarding ==>|"Tap Next"| n_t_journey
   n_t_settings ==>|"Tap Log in / Join Wikipedia"| n_t_access
-  n_t_journey ==>|"Tap search and type a query +4 more"| n_t_library
   n_t_library ==>|"Tap a result"| n_t_journey
-  n_t_journey ==>|"(Tap Activity tab)"| n_t_access
+  n_t_journey ==>|"Tap Save, then open Saved +2 more"| n_t_library
+  n_t_journey ==>|"Tap Activity tab"| n_t_access
   n_t_journey ==>|"Tap the profile icon"| n_t_settings
-  n_t_settings ==>|"(Tap Privacy policy)"| n_t_support
+  n_t_settings ==>|"Tap Privacy policy"| n_t_support
   n_t_settings ==>|"Tap Donate"| n_t_payments
-  style n_t_onboarding fill:#EAF9F1,stroke:#31C476,stroke-width:3px,color:#202122
-  style n_t_access fill:#EBFAF8,stroke:#3FCFC2,stroke-width:3px,color:#202122
-  style n_t_journey fill:#EAF3F9,stroke:#3190C4,stroke-width:3px,color:#202122
-  style n_t_library fill:#EBEEFA,stroke:#3F5CCF,stroke-width:3px,color:#202122
-  style n_t_settings fill:#EEEAF9,stroke:#5531C4,stroke-width:3px,color:#202122
-  style n_t_payments fill:#F5EBFA,stroke:#A23FCF,stroke-width:3px,color:#202122
-  style n_t_support fill:#F9EAF7,stroke:#C431B0,stroke-width:3px,color:#202122
+  style n_t_onboarding fill:#09160F,stroke:#5AE299,stroke-width:3px,color:#EAECF0
+  style n_t_access fill:#091615,stroke:#5AE2D6,stroke-width:3px,color:#EAECF0
+  style n_t_journey fill:#091116,stroke:#5AB2E2,stroke-width:3px,color:#EAECF0
+  style n_t_library fill:#090B16,stroke:#5A75E2,stroke-width:3px,color:#EAECF0
+  style n_t_settings fill:#0C0916,stroke:#7B5AE2,stroke-width:3px,color:#EAECF0
+  style n_t_payments fill:#120916,stroke:#B75AE2,stroke-width:3px,color:#EAECF0
+  style n_t_support fill:#160914,stroke:#E25AD0,stroke-width:3px,color:#EAECF0

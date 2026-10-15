@@ -17,7 +17,7 @@ personas:                       # who the stories are for
     as_a: new user              # used in "As a ..."; defaults to the lower-cased name
     description: Opens the app for the first time.
 
-# theme:                        # OPTIONAL - make the generated map look like the app (light background always).
+# theme:                        # OPTIONAL - make the generated map look like the app (light by default; background: "#000000" or mode: dark = dark theme).
 #   primary: "#2D7A5C"          #   brand colour; status / severity / topic colours are derived from it
 #   text: "#202124"             #   also: background, surface, border, secondary (all #RRGGBB)
 #   font: "Inter"               #   family name; proprietary fonts are only referenced, with a safe fallback
@@ -27,7 +27,7 @@ personas:                       # who the stories are for
 #   # severity: { high: "#...", medium: "#...", low: "#..." }
 #   # Fill it from the app's code:  python3 docs/story-map/storymap.py theme-from path/to/app/source
 #   device:                     #   device mockup around every screenshot (drawn with Pillow; auto-detected from the screenshot)
-#     style: black              #   black | titanium | light
+#     style: auto               #   auto (black; titanium on a dark theme) | black | titanium | light
 #     # model: iphone-island    #   default model: iphone-island | iphone-notch | iphone-home-button | android-generic | tablet | browser-window | none
 #     badge: label              #   label (dot + text under the device) | dot
 #     # frames: frames.json     #   OPTIONAL: your own frame PNGs (never commit them), see skills/user-story-maps/references/frames.md

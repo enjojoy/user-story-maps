@@ -83,7 +83,7 @@ class TestValidate(Base):
         self.assertIn("BUILT_NOT_VERIFIED", codes(self.issues(), "error"))
 
     def test_absolute_image_path_rejected(self):
-        self.edit("image: screens/welcome.png", "image: /Users/someone/welcome.png")
+        self.edit("image: screens/welcome.png", "image: /Use" + "rs/someone/welcome.png")
         self.assertIn("IMAGE_PATH", codes(self.issues(), "error"))
 
     def test_bad_edge(self):
@@ -550,7 +550,7 @@ class TestDevice(unittest.TestCase):
 
     def test_styles_differ(self):
         px = {}
-        for style in sm.DEVICE_STYLES:
+        for style in ("black", "titanium", "light"):
             sm.TH["device"]["style"] = style
             sm._DEV_CACHE.clear()
             dv = sm.render_device(self.m(), {}, self.shot(600, 1300), "iphone-island", (300, 500), 1, shadow=False)
@@ -725,6 +725,141 @@ class TestTree(unittest.TestCase):
             nodes, edges = sm.flow_graph(m, "f1")
             ch = sm.flow_tree([n["key"] for n in nodes], edges)[0]
             self.assertEqual(ch["s0"], ["c0", "c1", "c2"])
+
+
+# --------------------------------------------------------------------------- no white cards, dark theme
+CARD_YAML = """app:
+  name: "Cards"
+  platform: "ios"
+topics:
+  - id: t1
+    title: "Main journey"
+personas:
+  - id: u
+    name: "User"
+    as_a: "a user"
+    description: "x"
+flows:
+  - id: f1
+    title: "Flow"
+    description: "d"
+    edges:
+      - "a -> b: next"
+screens:
+  - id: a
+    title: "Screen A has a long enough title"
+    flow: f1
+    topic: t1
+    image: screens/a.png
+  - id: b
+    title: "B"
+    flow: f1
+    topic: t1
+    image: screens/b.png
+stories:
+  - id: US-1
+    persona: u
+    want: "x"
+    so_that: "y"
+    screens: [a, b]
+    status: unverified
+"""
+
+
+class TestNoWhiteCards(unittest.TestCase):
+    """Devices, titles and status badges sit directly on the lane/page colour: no card is drawn behind them."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not sm.HAVE_PIL:
+            raise unittest.SkipTest("Pillow not installed")
+
+    def tearDown(self):
+        sm.apply_theme(sm.load_model(EXAMPLE))      # leave the module-level theme as the example defines it
+        sm._DEV_CACHE.clear()
+
+    def render(self, theme=""):
+        from PIL import Image
+        d = tempfile.mkdtemp()
+        os.makedirs(os.path.join(d, "screens"))
+        for n in "ab":
+            Image.new("RGB", (600, 1300), (90, 130, 180)).save(os.path.join(d, "screens", n + ".png"))
+        with open(os.path.join(d, "stories.yaml"), "w") as f:
+            f.write(CARD_YAML + theme)
+        m = sm.load_model(d)
+        sm.apply_theme(m)
+        sm._DEV_CACHE.clear()
+        out = os.path.join(d, "arch.png")
+        info = sm.pil_architecture(m, out)
+        return m, info, Image.open(out).convert("RGB")
+
+    def check_corners_are_lane(self, m, info, im):
+        tp = m["T"]["t1"]
+        lane = sm.hexrgb(sm.tint(tp["color"], 0.93))
+        self.assertEqual(len(info["cards"]), 2)
+        for sid, (x, y, w, h) in info["cards"].items():
+            for px in ((x + 2, y + 2), (x + w - 3, y + 2), (x + 2, y + h - 3), (x + w - 3, y + h - 3)):
+                self.assertEqual(im.getpixel(px), lane, (sid, px, "a card background is drawn behind the device"))
+            # the title strip beside the text (left edge, at title height) is the lane colour too
+            self.assertEqual(im.getpixel((x + 2, y + 10)), lane)
+        return lane
+
+    def test_light_architecture_has_no_card_fill(self):
+        m, info, im = self.render()
+        lane = self.check_corners_are_lane(m, info, im)
+        self.assertNotEqual(lane, (255, 255, 255))
+
+    def test_dark_architecture_has_no_card_fill(self):
+        m, info, im = self.render('theme:\n  primary: "#3366CC"\n  background: "#000000"\n')
+        self.assertTrue(sm.TH["dark"])
+        lane = self.check_corners_are_lane(m, info, im)
+        self.assertLess(sum(lane) / 3, 40, lane)                      # the lane is a dark tint, not a light one
+        self.assertEqual(im.getpixel((2, 2)), (0, 0, 0))              # page background is black
+
+    def test_dark_theme_derives_legible_colours(self):
+        m, info, im = self.render('theme:\n  primary: "#3366CC"\n  background: "#000000"\n')
+        lum = lambda h: sm._lum(h)
+        self.assertEqual(sm.TH["bg"], "#000000")
+        self.assertGreater(lum(sm.TH["ink"]), 0.8)                     # light text
+        self.assertGreater(lum(sm.TH["muted"]), 0.5)
+        for k in sm.STATUS:
+            self.assertGreater(lum(sm.STATUS[k]["color"]), 0.3, k)     # status colours readable on black
+        self.assertGreater(lum(m["T"]["t1"]["color"]), 0.15)
+        self.assertEqual(sm.TH["device"]["style"], "auto")
+        sm._DEV_CACHE.clear()
+        self.assertEqual(sm.on_color(), "#000000")                     # labels on bright chips are black
+        m2, _, _ = self.render('theme:\n  mode: light\n')
+        self.assertFalse(sm.TH["dark"])
+
+    def test_dark_theme_picks_the_light_frame(self):
+        self.render('theme:\n  mode: dark\n')
+        self.assertTrue(sm.TH["dark"])
+        self.assertNotEqual(sm.TH["bg"], "#FFFFFF")
+        m = {"app": {"platform": "ios", "device": ""}, "root": tempfile.gettempdir() + "/storymap-no-such-dir"}
+        from PIL import Image
+        dv = sm.render_device(m, {}, Image.new("RGB", (600, 1300), (90, 130, 180)), "iphone-island", (300, 500), 1, shadow=False)
+        self.assertGreater(sum(dv["img"].getpixel((2, dv["size"][1] // 2))[:3]) / 3, 100)   # titanium band, not a black one on black
+
+    def test_wikipedia_example_is_a_black_theme(self):
+        wiki = os.path.join(HERE, "..", "examples", "wikipedia-ios")
+        sm.apply_theme(sm.load_model(wiki))
+        self.assertTrue(sm.TH["dark"])
+        self.assertEqual(sm.TH["bg"], "#000000")
+        arch = os.path.join(wiki, "generated", "architecture.png")
+        if os.path.isfile(arch):
+            from PIL import Image
+            self.assertEqual(Image.open(arch).convert("RGB").getpixel((2, 2)), (0, 0, 0))
+
+    def test_flow_and_html_use_theme_background(self):
+        from PIL import Image
+        m, info, im = self.render('theme:\n  background: "#000000"\n')
+        gen = tempfile.mkdtemp()
+        sm.pil_flow(m, "f1", os.path.join(gen, "f1.png"))
+        fl = Image.open(os.path.join(gen, "f1.png")).convert("RGB")
+        self.assertEqual(fl.getpixel((2, 2)), (0, 0, 0))
+        css = sm.themeify(".card{background:#fff;color:#202124}")
+        self.assertIn("background:#000000", css.lower())
+        self.assertNotIn("border:1px solid var(--line);border-radius:12px;width:250px", css)   # html .card has no frame
 
 
 if __name__ == "__main__":

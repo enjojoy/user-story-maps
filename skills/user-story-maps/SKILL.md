@@ -79,12 +79,13 @@ One value per line, 2-space indent, `- ` items, `#` comments, `[a, b]` lists; qu
 
 ## Theme
 
-Look like the app: app font, light background, app palette incl. status/gap colours. Only `primary` required; status, severity, topic colours derive from it. No `theme:` → legacy green.
+Look like the app: app font, app background (light or dark), app palette incl. status/gap colours. Only `primary` required; status, severity, topic colours derive from it. No `theme:` → legacy green.
 
 ```yaml
 theme:
   primary: "#3366CC"         # brand/accent
   text: "#202122"            # optional: background, text, muted, surface, border, secondary (#RRGGBB)
+  # background: "#000000"    # dark app: black page + lanes (or `mode: dark`); see Dark below
   heading_font: "Gelasio"    # `font:` = body (default system sans)
   google_font: true          # fetch open-licensed family (cached outside repo)
   # font_file: tools/MyFont.ttf   # redistributable, relative; font_file_bold optional
@@ -94,16 +95,18 @@ theme:
 ```
 
 1. Run `theme-from`. By hand: iOS `Assets.xcassets/*.colorset`, Theme/Color/Font Swift; Android `res/values/colors.xml`, `themes.xml`, `res/font/`; web `tailwind.config.*`, CSS `:root { --… }`, token JSON.
-2. `primary` = brand/accent; light-mode `text`/`border`. Map success/warning/error → `status:` (built=success, partly=warning, missing=neutral gray) and `severity:`.
+2. `primary` = brand/accent; `text`/`border` of the app's own mode. Map success/warning/error → `status:` (built=success, partly=warning, missing=neutral gray) and `severity:`.
 3. Fonts: real family name. Bundle only open-licensed (OFL/Apache, or own file). Proprietary/system: name only (used if installed, else fallback) or open look-alike + `google_font: true` (Gelasio for Georgia).
 4. Build; view `architecture.png`, `one-pager.png`; tune until readable and status colours stay distinguishable.
+5. **Dark**: `background:` darker than 30% luminance (e.g. `"#000000"`) or `mode: dark` (`mode: light` forces light). Everything follows in all outputs: lanes mix toward the background, light text/border, lifted status/topic colours, black text on bright chips, titanium frames (`style: auto`). Give `text`/`muted`/`surface`/`border`/`status:` explicitly to override.
 
 ## Looks
 
 | Look | Rule |
 |---|---|
 | Device frames | Every screenshot, all outputs: `iphone-island`, `iphone-notch`, `iphone-home-button`, `android-generic`, `tablet`, `browser-window`, `none` |
-| Frame style | `theme.device.style`: `black` (default), `titanium`, `light` |
+| Frame style | `theme.device.style`: `auto` (default: black; titanium on dark), `black`, `titanium`, `light` |
+| No white cards | No white cards behind devices: device, title and status badge sit directly on the lane/page background (transparent in every output, incl. HTML cards and thumbs) |
 | Status | Dot + label under device (`theme.device.badge`: `label`/`dot`). No coloured border |
 | Not captured | Dashed empty device outline + reason |
 | Scaling | Contain by real aspect ratio; never crop/stretch; landscape → rotated frame |

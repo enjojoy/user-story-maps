@@ -40,7 +40,7 @@ DEFAULT_TOPIC = "general"
 SEVERITIES = ["high", "medium", "low"]
 PLATFORMS = ["ios", "android", "web"]
 DEVICE_MODELS = ("iphone-island", "iphone-notch", "iphone-home-button", "android-generic", "browser-window", "tablet", "none")
-DEVICE_STYLES = ("black", "titanium", "light")
+DEVICE_STYLES = ("auto", "black", "titanium", "light")
 HTML_BUDGET = 4_500_000   # bytes of embedded images + fonts; story-map.html stays under about 5 MB
 SOURCE_NAMES = ("stories.yaml", "stories.yml", "stories.json")
 
@@ -442,7 +442,7 @@ def validate(m):
         if dv and dv not in known_dev:
             E("UNKNOWN_DEVICE", "%s '%s' is not one of %s (or a frame name from frames.json)" % (what, dv, ", ".join(DEVICE_MODELS)))
     if TH["device"]["style"] not in DEVICE_STYLES:
-        W("BAD_DEVICE_STYLE", "theme.device.style '%s' is not one of %s; using 'black'" % (TH["device"]["style"], "/".join(DEVICE_STYLES)))
+        W("BAD_DEVICE_STYLE", "theme.device.style '%s' is not one of %s; using 'auto'" % (TH["device"]["style"], "/".join(DEVICE_STYLES)))
     for s in m["screens"]:
         i = s["id"] or "(no id)"
         if s["flow"] and s["flow"] not in m["F"]:
@@ -560,9 +560,16 @@ def cross_flow_edges(m):
 
 
 def tint(hexcolor, a=0.88):
-    """Mix a colour with white (a = how much white)."""
+    """Mix a colour with the page background (a = how much background): a light tint on a light theme, a dark tint on a dark one."""
     r, g, b = (int(hexcolor.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
-    return "#%02X%02X%02X" % tuple(int(c + (255 - c) * a) for c in (r, g, b))
+    bg = TH["bg"].lstrip("#") if TH.get("dark") else "FFFFFF"
+    br, bgg, bb = (int(bg[i:i + 2], 16) for i in (0, 2, 4))
+    return "#%02X%02X%02X" % tuple(int(c + (t - c) * a) for c, t in zip((r, g, b), (br, bgg, bb)))
+
+
+def on_color():
+    """Text colour for labels drawn on a status-coloured chip: white on a light theme, the page background on a dark one."""
+    return TH["bg"] if TH.get("dark") else "white"
 
 
 def topic_title(m, tid):
@@ -852,7 +859,7 @@ def gen_mermaid(m, gen, render=True):
         for fn in sorted(os.listdir(os.path.join(gen, "mermaid"))):
             if fn.endswith(".mmd"):
                 src = os.path.join(gen, "mermaid", fn)
-                subprocess.run(["mmdc", "-i", src, "-o", src[:-4] + ".png", "-b", "white"],
+                subprocess.run(["mmdc", "-i", src, "-o", src[:-4] + ".png", "-b", TH["bg"]],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return files
 
@@ -1185,7 +1192,9 @@ def _user_frame(m, name):
 def render_device(m, s, im, model, box, scale=1, shadow=True):
     """Screenshot (PIL RGB) inside a device frame fitted to box (w, h) in points -> dict(img, ov, rect, size, model).
     img = RGBA device with shadow; ov = frame only (transparent screen); rect = screen rectangle (x, y, w, h) inside img."""
-    style = TH["device"]["style"] if TH["device"]["style"] in DEVICE_STYLES else "black"
+    style = TH["device"]["style"] if TH["device"]["style"] in DEVICE_STYLES else "auto"
+    if style == "auto":      # a dark frame vanishes on a dark page: use the light titanium frame there
+        style = "titanium" if TH.get("dark") else "black"
     bw, bh = int(box[0] * scale), int(box[1] * scale)
     fname = _frame_for(m, s.get("device") or "") or _frame_for(m, m["app"].get("device") or TH["device"]["model"]) or (
         _frame_for(m, model) if not (s.get("device") or m["app"].get("device") or TH["device"]["model"]) else None)
@@ -1282,7 +1291,7 @@ def badge_img(status, scale=1, label=True):
     h = int(26 * scale * S2)
     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    d.rounded_rectangle((0, 0, w - 1, h - 1), h // 2, fill=hexrgb(TH["bg"]) + (255,), outline=hexrgb(TH["border"]) + (255,), width=max(1, S2 // 2 + 1))
+    d.rounded_rectangle((0, 0, w - 1, h - 1), h // 2, fill=None, outline=hexrgb(TH["border"]) + (255,), width=max(1, S2 // 2 + 1))   # outline only: no fill, the pill sits on the lane
     cy = h // 2
     d.ellipse((pad, cy - dot, pad + dot * 2, cy + dot), fill=hexrgb(stv["color"]) + (255,))
     if label:
@@ -1446,9 +1455,9 @@ def dot_header(title, sub="", rankdir="LR"):
     if sub:
         lab += '<BR/><FONT POINT-SIZE="18" COLOR="#5F6368">%s</FONT><BR/> ' % dq(sub)
     return ['digraph G {',
-            '  graph [rankdir=%s bgcolor="#FFFFFF" fontname="Helvetica" nodesep=0.5 ranksep=1.0 pad=0.5 '
+            '  graph [rankdir=%s bgcolor="#FFFFFF" fontcolor="#202124" fontname="Helvetica" nodesep=0.5 ranksep=1.0 pad=0.5 '
             'labelloc=t labeljust=l label=<%s>];' % (rankdir, lab),
-            '  node [shape=plain fontname="Helvetica"];',
+            '  node [shape=plain fontname="Helvetica" fontcolor="#202124"];',
             '  edge [fontname="Helvetica" fontsize=19 color="#2D7A5C" fontcolor="#1F5A43" penwidth=2.6 arrowsize=1.3];']
 
 
@@ -1608,7 +1617,14 @@ def dashed_rect(d, box, color, width=3, dash=14):
 
 
 def paste_rgba(card, im, xy):
-    card.paste(im, xy, im)
+    """Paste with the image's own transparency (works for RGB targets and for transparent RGBA cards)."""
+    xy = (int(xy[0]), int(xy[1]))
+    if im.mode != "RGBA":
+        card.paste(im, xy)
+    elif card.mode == "RGBA":
+        card.alpha_composite(im, xy)
+    else:
+        card.paste(im, xy, im)
 
 
 def card_screen(m, s, sc=1):
@@ -1624,7 +1640,7 @@ def card_screen(m, s, sc=1):
     H0 = dv["size"][1]
     lh = int(28 * sc)
     H = int(8 * sc) + lh * len(tl) + int(6 * sc) + H0 + int(4 * sc) + badge.height + int(8 * sc) + int(20 * sc) + int(6 * sc)
-    card = Image.new("RGB", (CW, H), TH["bg"])
+    card = Image.new("RGBA", (CW, H), (0, 0, 0, 0))     # transparent: no card behind the device
     d = ImageDraw.Draw(card)
     y = int(8 * sc)
     for ln in tl:
@@ -1646,7 +1662,7 @@ def card_portal(text, kind, sc=1):
     c = Image.new("RGB", (int(300 * sc), H), TC("#FFE9DD") if kind == "out" else TC("#DDF1E8"))
     d = ImageDraw.Draw(c)
     for i, ln in enumerate(lines):
-        d.text((int(20 * sc), int(12 * sc) + i * int(26 * sc)), ln, font=f, fill="#222")
+        d.text((int(20 * sc), int(12 * sc) + i * int(26 * sc)), ln, font=f, fill=TC("#202124"))
     d.rectangle((0, 0, c.width - 1, H - 1), outline=TC("#2D7A5C"), width=max(1, int(3 * sc)))
     return c
 
@@ -1664,7 +1680,7 @@ def card_flow(m, f):
     d = ImageDraw.Draw(c)
     y = 16
     for ln in tl:
-        d.text((20, y), ln, font=font(28, True), fill="#123")
+        d.text((20, y), ln, font=font(28, True), fill=TC("#202124"))
         y += 36
     d.text((20, y + 2), "%d screens · %d stories" % (ns, len(us)), font=font(19), fill=TC("#5F6368"))
     mx = 16
@@ -1678,7 +1694,7 @@ def card_flow(m, f):
             lab = "%d %s" % (n, k)
             wd = tw(d, lab, font(18, True)) + 20
             d.rounded_rectangle((x, y + 38, x + wd, y + 70), 6, fill=STATUS[k]["color"])
-            d.text((x + 10, y + 43), lab, font=font(18, True), fill="white")
+            d.text((x + 10, y + 43), lab, font=font(18, True), fill=on_color())
             x += wd + 8
     d.rounded_rectangle((0, 0, 419, H - 1), 14, outline=TC("#2D7A5C"), width=4)
     return c
@@ -1776,13 +1792,13 @@ def render_cards(cards, edges, title, sub, out, maxrows=3):
             f_ = 0.3 + 0.17 * (k % 4) if len(pts) == 2 else 0.5
             labels.append((pts[0][0] + (pts[-1][0] - pts[0][0]) * f_, pts[0][1] + (pts[-1][1] - pts[0][1]) * f_, lab))
     for k, (x0, y0, _) in pos.items():
-        img.paste(cards[k], (x0, y0))
+        paste_rgba(img, cards[k], (x0, y0))
     f = font(18, True)
     for cx, cy, lab in labels:
         lines = wrap_px(d, lab, f, 170)
         w = max(tw(d, l, f) for l in lines) + 14
         h = 24 * len(lines) + 8
-        d.rounded_rectangle((cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2), 6, fill="white", outline=TC("#B7DCCB"))
+        d.rounded_rectangle((cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2), 6, fill=TH["bg"], outline=TC("#B7DCCB"))
         for i, l in enumerate(lines):
             d.text((cx - w / 2 + 7, cy - h / 2 + 4 + i * 24), l, font=f, fill=TC("#1F5A43"))
     img.save(out, optimize=True)
@@ -1925,7 +1941,7 @@ def render_tree(cards, edges, title, sub, out, sc=2):
     ox, oy = M, TOP
     P = {k: (L["pos"][k][0] + ox, L["pos"][k][1] + oy) for k in keys}
     for k in keys:
-        img.paste(cards[k], (int(P[k][0]), int(P[k][1])))
+        paste_rgba(img, cards[k], (P[k][0], P[k][1]))
 
     def xy(u, v):                 # abstract (along, across) -> canvas
         return (v + ox, u + oy) if tb else (u + ox, v + oy)
@@ -2002,7 +2018,7 @@ def render_tree(cards, edges, title, sub, out, sc=2):
     for (cx, cy), lab in labels:
         ls = label_lines(lab)
         w, h = label_ext(lab)
-        d.rounded_rectangle((cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2), int(6 * sc), fill="white", outline=TC("#B7DCCB"), width=max(1, int(sc)))
+        d.rounded_rectangle((cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2), int(6 * sc), fill=TH["bg"], outline=TC("#B7DCCB"), width=max(1, int(sc)))
         for i, l in enumerate(ls):
             d.text((cx - w / 2 + 7 * sc, cy - h / 2 + 4 * sc + i * int(24 * sc)), l, font=fL, fill=TC("#1F5A43"))
     img.save(out, optimize=True)
@@ -2037,7 +2053,7 @@ def pil_full(m, out):
     if not tmp:
         return False
     W = max(i.width for i in tmp)
-    img = Image.new("RGB", (W, sum(i.height for i in tmp) + 40 * len(tmp)), "white")
+    img = Image.new("RGB", (W, sum(i.height for i in tmp) + 40 * len(tmp)), TH["bg"])
     y = 0
     for i in tmp:
         img.paste(i, (0, y))
@@ -2125,7 +2141,7 @@ def card_compact(m, s):
     tl = wrap_px(tmp, s["title"], fT, CW - 16)
     CW = int(max(CW, max([tw(tmp, t, fT) for t in tl] or [0]) + 16))  # a long word must never be cut off
     H = 8 + 22 * len(tl) + 6 + h + 4 + badge.height + 8
-    card = Image.new("RGB", (CW, H), TH["bg"])
+    card = Image.new("RGBA", (CW, H), (0, 0, 0, 0))     # transparent: title, device and badge sit on the lane colour
     d = ImageDraw.Draw(card)
     y = 8
     for ln in tl:
@@ -2207,7 +2223,7 @@ def pil_architecture(m, out):
     for p, q, e, col in cross:  # between topics: thick, topic coloured, also behind the cards (visible in the gaps)
         d.line((p, q), fill=hexrgb(col), width=6)
     for sid, (cx, cy) in pos.items():
-        img.paste(cards[sid], (cx, cy))
+        paste_rgba(img, cards[sid], (cx, cy))
     for p, q, e in lines:
         arrow_head(d, p, q, TC("#9AA0A6"), 12)
     f = font(16, True)
@@ -2240,6 +2256,7 @@ def pil_architecture(m, out):
             for i, l in enumerate(lines_):
                 d.text((mx - w / 2 + 7, my - h / 2 + 4 + i * 22), l, font=f, fill=col)
     img.save(out, optimize=True)
+    return dict(cards={sid: pos[sid] + cards[sid].size for sid in pos}, bands=[(r["topic"]["id"], bx, TOP, bw, bh) for r, bx, bw, bh in bands])
 
 
 def gen_diagrams(m, gen, use_graphviz=True):
@@ -2354,11 +2371,11 @@ header{background:#fff;border-bottom:1px solid var(--line);padding:14px 20px;pos
 h1{margin:0;font-size:20px}.sub{color:var(--mut);font-size:13px}
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
 .chip{border:2px solid;border-radius:999px;padding:2px 10px;font-size:13px;cursor:pointer;user-select:none;background:#fff}
-.chip.off{opacity:.35}.tabs button{border:0;background:none;font:inherit;padding:6px 12px;cursor:pointer;border-bottom:3px solid transparent}
-.tabs button.on{border-color:#2d7a5c;font-weight:600}select,input{font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:6px}
+.chip.off{opacity:.35}.tabs button{border:0;background:none;font:inherit;color:inherit;padding:6px 12px;cursor:pointer;border-bottom:3px solid transparent}
+.tabs button.on{border-color:#2d7a5c;font-weight:600}select,input{font:inherit;color:inherit;background:#fff;padding:4px 8px;border:1px solid var(--line);border-radius:6px}
 main{padding:20px}section.flow{margin-bottom:34px}section.flow h2{margin:0 0 4px}.desc{color:var(--mut);margin:0 0 10px}
 .row{display:flex;gap:18px;overflow-x:auto;padding-bottom:12px;align-items:flex-start}
-.card{background:#fff;border:1px solid var(--line);border-radius:12px;width:250px;flex:none;overflow:hidden;transition:opacity .2s}
+.card{width:250px;flex:none;transition:opacity .2s}
 .card.dim{opacity:.25}.card .ti{font-weight:700;padding:8px 12px 0;text-align:center}.card .id{color:#80868b;font-size:11px;padding:0 12px 4px;text-align:center}
 .card.land{width:460px}.card.sq{width:340px}.card.tall{width:190px}
 .dv{position:relative;display:block;margin:0 auto;aspect-ratio:var(--ar);width:100%;cursor:zoom-in;filter:drop-shadow(0 6px 9px rgba(10,12,20,.32))}
@@ -2378,8 +2395,8 @@ th{background:#eef1f3;position:sticky;top:105px}tr.hide{display:none}td.st{white
 .grid .h{background:#eef1f3;font-weight:700}.grid .mini{display:inline-block;margin:2px}
 .gap{background:#fff;border:1px solid var(--line);border-left:6px solid;border-radius:8px;padding:10px 14px;margin-bottom:10px}
 #lb{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;flex-direction:column;z-index:20}
-#lb img#lbi{max-width:92vw;max-height:84vh;border-radius:8px}#lb #lbd .dv{height:78vh;width:auto;max-width:92vw;margin:0;cursor:default;filter:drop-shadow(0 10px 24px rgba(0,0,0,.6))}#lb .cap{color:#fff;margin-top:10px;text-align:center}
-#lb button{position:absolute;top:50%;background:#fff3;color:#fff;border:0;font-size:34px;padding:8px 14px;cursor:pointer;border-radius:8px}
+#lb img#lbi{max-width:92vw;max-height:84vh;border-radius:8px}#lb #lbd .dv{height:78vh;width:auto;max-width:92vw;margin:0;cursor:default;filter:drop-shadow(0 10px 24px rgba(0,0,0,.6))}#lb .cap{color:#fefefe;margin-top:10px;text-align:center}
+#lb button{position:absolute;top:50%;background:#fff3;color:#fefefe;border:0;font-size:34px;padding:8px 14px;cursor:pointer;border-radius:8px}
 .hidden{display:none}
 .tpc{font-size:11px;font-weight:700;padding:2px 10px;letter-spacing:.03em}
 .tpill{border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600;white-space:nowrap;border:2px solid}
@@ -2551,9 +2568,9 @@ def gen_onepager(m, gen):
     x, y = M, 180
     for k, n in c.items():
         d.rounded_rectangle((x, y, x + 330, y + 110), 16, fill=STATUS[k]["color"])
-        d.text((x + 20, y + 8), str(n), font=font(60, True), fill="white")
-        d.text((x + 120, y + 22), STATUS[k]["label"], font=font(28, True), fill="white")
-        d.text((x + 120, y + 62), "%d%% of stories" % round(100 * n / total), font=font(22), fill="white")
+        d.text((x + 20, y + 8), str(n), font=font(60, True), fill=on_color())
+        d.text((x + 120, y + 22), STATUS[k]["label"], font=font(28, True), fill=on_color())
+        d.text((x + 120, y + 62), "%d%% of stories" % round(100 * n / total), font=font(22), fill=on_color())
         x += 350
     d.text((x + 20, y + 20), "%d stories · %d screens · %d flows · %d personas" % (
         len(m["stories"]), len(m["screens"]), len(m["flows"]), len(m["personas"])), font=font(28), fill=TC("#202124"))
@@ -2738,11 +2755,11 @@ import colorsys, copy, tempfile, urllib.request, urllib.parse
 
 STATUS_DEFAULT = copy.deepcopy(STATUS)
 SEV_DEFAULT = {"high": "#D93025", "medium": "#E8A33D", "low": "#9AA0A6"}
-DEFAULT_THEME = dict(font="", heading_font="", fallback="sans-serif", bg="#FFFFFF", ink="#202124", ink2="#3C4043",
+DEFAULT_THEME = dict(dark=False, font="", heading_font="", fallback="sans-serif", bg="#FFFFFF", ink="#202124", ink2="#3C4043",
                      muted="#5F6368", muted2="#80868B", surface="#F7F8F9", surface2="#F1F3F4", border="#DADCE0",
                      primary="#2D7A5C", secondary="#C9733E", accent_dark="#1F5A43", gray="#9AA0A6",
                      portal_in="#DDF1E8", portal_out="#FFE9DD", border_accent="#B7DCCB",
-                     device=dict(style="black", model="", badge="label", frames=""))
+                     device=dict(style="auto", model="", badge="label", frames=""))
 TH = dict(DEFAULT_THEME, sev=dict(SEV_DEFAULT), font_files={})
 # default literal -> themed value, applied to generated text (dot / mermaid / html) and to PIL colours via TC()
 _LITERALS = {"#202124": "ink", "#3C4043": "ink2", "#5F6368": "muted", "#80868B": "muted2", "#F1F3F4": "surface2",
@@ -2762,6 +2779,8 @@ def themeify(text):
     """Replace default colour literals / font in generated text (Graphviz, Mermaid, HTML) with the theme."""
     text = _LIT_RE.sub(lambda mt: TH[_LITERALS[mt.group(0).upper()]], text)
     text = text.replace('BGCOLOR="white"', 'BGCOLOR="%s"' % TH["bg"])
+    if TH.get("dark"):                     # labels on status chips: page-coloured text on a bright chip
+        text = text.replace('COLOR="white"', 'COLOR="%s"' % TH["bg"])
     return text
 
 
@@ -2783,6 +2802,23 @@ def _hsl(h):
 def _from_hsl(h, s, l):
     r, g, b = colorsys.hls_to_rgb((h % 360) / 360.0, max(0, min(1, l)), max(0, min(1, s)))
     return "#%02X%02X%02X" % (round(r * 255), round(g * 255), round(b * 255))
+
+
+def _lum(h):
+    r, g, b = _rgb(h)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _mix(a, b, t):
+    """Colour a moved a fraction t of the way to colour b."""
+    ra, rb = _rgb(a), _rgb(b)
+    return "#%02X%02X%02X" % tuple(round((x + (y - x) * t) * 255) for x, y in zip(ra, rb))
+
+
+def _lift(c, lmin=0.62):
+    """Lighten a colour so it reads on a dark background (hue kept, saturation capped)."""
+    h, s, l = _hsl(c)
+    return _from_hsl(h, min(s, 0.85), max(l, lmin))
 
 
 def _hue_toward(h, target, t):
@@ -2925,6 +2961,30 @@ def apply_theme(m):
                 if not is_hex(g(n)):
                     raise SourceError("theme.%s must look like #RRGGBB" % n)
                 th[key] = g(n)
+    given = {k for k, names in (("bg", ("background", "bg")), ("ink", ("text", "ink")), ("muted", ("muted",)), ("surface", ("surface",)),
+                                ("border", ("border",))) for n in names if g(n)}
+    mode = g("mode").lower()
+    dark = mode == "dark" or (mode != "light" and "bg" in given and _lum(th["bg"]) < 0.30)
+    th["dark"] = dark
+    if dark:   # dark theme: black page and lanes, light text; colours are lifted so they stay legible on black
+        if "bg" not in given:
+            th["bg"] = "#0B0C0E"
+        h0, s0 = _hsl(th["primary"])[:2]
+        s0 = max(0.35, min(0.70, s0))
+        mix = lambda a: _mix(th["bg"], "#FFFFFF", a)
+        for k, v in dict(ink="#F2F3F5", ink2="#D5D8DC", muted="#A5ABB3", muted2="#80868F", border="#383C42", surface=mix(0.06), surface2=mix(0.10),
+                         gray="#8B929B", border_accent=_from_hsl(h0, s0, 0.35), portal_in=_from_hsl(h0, s0, 0.17),
+                         portal_out=_from_hsl(_hsl(th["secondary"])[0], s0, 0.17)).items():
+            if k not in given:
+                th[k] = v
+        th["primary"] = _lift(th["primary"])
+        th["secondary"] = _lift(th["secondary"])
+        th["accent_dark"] = _lift(th["accent_dark"], 0.75)
+        for d_, k_ in ((status, "status"), (sev, "severity")):
+            sub_ = raw.get(k_) if isinstance(raw.get(k_), dict) else {}
+            for k in d_:
+                if k not in sub_:
+                    d_[k] = _lift(d_[k])
     for grp, dest in (("status", status), ("severity", sev)):
         sub = raw.get(grp) or {}
         if isinstance(sub, dict):
@@ -2934,7 +2994,7 @@ def apply_theme(m):
     th["fallback"] = g("fallback") if g("fallback") in ("serif", "sans-serif", "monospace") else "sans-serif"
     dev = raw.get("device") if isinstance(raw.get("device"), dict) else {}
     dg = lambda k: _s(dev, k).lower() or _s(raw, "device_" + k).lower()
-    th["device"] = dict(style=dg("style") or "black", model=dg("model"), badge=dg("badge") if dg("badge") in ("label", "dot") else "label",
+    th["device"] = dict(style=dg("style") or "auto", model=dg("model"), badge=dg("badge") if dg("badge") in ("label", "dot") else "label",
                         frames=_s(dev, "frames") or _s(raw, "device_frames"))
     th["font"], th["heading_font"] = g("font"), g("heading_font") or g("font")
     google = g("google_font").lower() in ("true", "yes", "1")
@@ -2952,10 +3012,13 @@ def apply_theme(m):
     _FONTS.clear()
     for k, v in STATUS_DEFAULT.items():
         STATUS[k]["color"] = status[k]
-        STATUS[k]["bg"] = _from_hsl(*_hsl(status[k])[:1], 0.55, 0.93) if m["theme_derived"] else v["bg"]
+        STATUS[k]["bg"] = (_from_hsl(_hsl(status[k])[0], 0.35, 0.16) if th["dark"] else _from_hsl(*_hsl(status[k])[:1], 0.55, 0.93)) if (
+            m["theme_derived"] or th["dark"]) else v["bg"]
     # topic colours: explicit > derived from the palette > legacy palette
     n = len(m["topics"])
     derived = derive_topic_colors(n, th["primary"]) if m["theme_derived"] else TOPIC_PALETTE
+    if th["dark"]:
+        derived = [_lift(c) for c in derived]
     for i, tp in enumerate(m["topics"]):
         if not tp.get("color"):
             tp["color"] = derived[i % len(derived)]

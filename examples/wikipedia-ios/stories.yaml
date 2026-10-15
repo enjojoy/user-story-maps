@@ -1,4 +1,4 @@
-# Wikipedia iOS - story map source (open-source app, MIT). Real screenshots from the iOS simulator.
+# Wikipedia iOS - story map source (open-source app, MIT). Real screenshots from the iOS simulator, app theme "dark".
 # This is the ONE file you edit. Run `python3 scripts/storymap.py build examples/wikipedia-ios` to regenerate generated/.
 # Format: simple YAML. One value per line, 2-space indents, "- " starts a list item.
 
@@ -8,28 +8,29 @@ app:
   version: "main @ ca8aaeb"
   checked: 2026-10-15
   summary: The open-source Wikipedia iOS app - read, search and save articles from the free encyclopedia.
-  disclaimer: "Unofficial illustration of the open-source Wikipedia iOS app (MIT); not affiliated with or endorsed by the Wikimedia Foundation. Screenshots captured 2026-10-15 in the iOS simulator from commit ca8aaeb95639ca82105bcd5510277d8dde0e420e; trademarks and content belong to their owners (Wikipedia content CC BY-SA)."
+  disclaimer: "Unofficial illustration of the open-source Wikipedia iOS app (MIT); not affiliated with or endorsed by the Wikimedia Foundation. Screenshots captured 2026-10-15 in the iOS simulator (app theme dark) from commit ca8aaeb95639ca82105bcd5510277d8dde0e420e; trademarks and content belong to their owners (Wikipedia content CC BY-SA)."
 
-theme:                          # taken from the app's own design tokens (WMFColor.swift / WMFFont.swift) via `theme-from`
-  primary: "#3366CC"            # Wikimedia blue600
-  text: "#202122"               # gray700
-  muted: "#72777D"              # gray500
-  surface: "#F8F9FA"            # gray100
-  border: "#C8CCD1"             # gray300
+theme:                          # dark map for a dark-themed app: black page and lanes, light text (see SKILL.md "Dark")
+  background: "#000000"         # luminance < 30% switches the whole generator to dark mode
+  primary: "#6699FF"            # Wikimedia blue300, the accent the app uses on dark surfaces
+  text: "#EAECF0"               # gray200
+  muted: "#A2A9B1"              # gray400
+  surface: "#101418"            # gray800
+  border: "#2E3136"             # gray650
   heading_font: "Gelasio"       # the app sets titles in Georgia (proprietary): Gelasio is the open (OFL) metric-compatible stand-in
   google_font: true             # downloaded on demand and cached outside the repo
-  device:                       # simulator screenshots are shown in an iPhone mockup (drawn procedurally; no Apple artwork)
-    style: black                # black | titanium | light
-    badge: label                # status = dot + label under the device (no coloured border)
-  status:                       # the app's own success / warning / neutral tokens, darkened slightly so white labels stay readable
-    built: "#14866D"            # green700
-    partly: "#D9A300"           # yellow600, darkened
-    unverified: "#6B8FD6"       # blue300, darkened
-    missing: "#72777D"          # gray500
+  device:                       # simulator screenshots in an iPhone mockup (drawn procedurally; no Apple artwork)
+    style: auto                 # auto = light titanium frame on a dark theme
+    badge: label                # status = dot + label under the device
+  status:                       # the app's own palette (WMFColor.swift), bright enough for black text on a chip
+    built: "#00AF89"            # green600
+    partly: "#FFCC33"           # yellow600
+    unverified: "#6699FF"       # blue300
+    missing: "#A2A9B1"          # gray400
   severity:
-    high: "#DD3333"             # red600
-    medium: "#D9A300"
-    low: "#A2A9B1"              # gray400
+    high: "#FF6B6B"             # red600 (#DD3333) lifted for black
+    medium: "#FFCC33"
+    low: "#A2A9B1"
 
 topics:
   - id: onboarding
@@ -43,16 +44,16 @@ topics:
     description: Reading - the Explore feed and the article view with its reading tools.
   - id: library
     title: Content & library
-    description: Finding and keeping content - search, saved pages, tabs, places, activity.
+    description: Finding and keeping content - search, saved pages, tabs, places.
   - id: settings
     title: Settings & account
-    description: Profile menu, settings, languages, appearance.
+    description: Profile menu, settings and languages.
   - id: payments
     title: Donations
     description: Wikipedia has no subscription or paywall; the only money flow is the donation page.
   - id: support
     title: Support & legal
-    description: Privacy policy, terms of use and help links (open outside the app).
+    description: Privacy policy and terms of use open outside the app.
 
 personas:
   - id: newcomer
@@ -71,10 +72,6 @@ personas:
     name: Offline commuter
     as_a: commuter with patchy signal
     description: Wants articles available without a connection.
-  - id: contributor
-    name: Contributor
-    as_a: logged-in contributor
-    description: Has a Wikipedia account.
 
 flows:
   - id: first-run
@@ -87,61 +84,48 @@ flows:
       - "ob-languages -> ob-personalize: Tap Next"
       - "ob-personalize -> ob-interests: Tap Next"
       - "ob-interests -> ob-feed: Tap Next"
-      - "ob-feed -> home: Tap Next (onboarding complete)"
-  - id: login
+      - "ob-feed -> home: Tap Next"
+  - id: logged-out
     topic: access
-    title: "2 · Login"
-    description: Logged-out prompts that lead to the login form.
+    title: "2 · Logged out"
+    description: Account prompts that lead to the login form.
     edges:
       - "profile -> login: Tap Log in / Join Wikipedia"
-      - "activity -> login: (Tap Log in / Join Wikipedia)"
+      - "activity -> login: Tap Log in / Join Wikipedia"
   - id: reading
     topic: journey
     title: "3 · Reading"
-    description: From the Explore feed into an article and its tools.
+    description: From the Explore feed into an article and its reading tools.
     edges:
-      - "home -> home-foryou: Tap For You"
+      - "home -> foryou: Tap For You"
+      - "home -> article: Tap an article"
       - "article -> article-toc: Tap Contents"
       - "article -> article-theme: Tap Reading themes"
       - "article -> article-overflow: Tap the more menu"
       - "article -> article-find: Tap Find in article"
       - "article -> article-languages: Tap Languages"
-      - "article -> image-gallery: (Tap the lead image)"
-  - id: discover
+      - "article -> gallery: Tap the lead image"
+  - id: library
     topic: library
     title: "4 · Search and library"
-    description: Searching, tabs, saved pages, places, activity.
+    description: Searching, saved pages, tabs and places.
     edges:
-      - "home -> search-results: Tap search and type a query"
       - "search -> search-results: Type a query"
       - "search-results -> article: Tap a result"
-      - "article -> saved: (Tap Save, then open Saved)"
-      - "article -> tabs-overview: (Tap Tabs)"
-      - "home -> tabs-overview: Tap the tabs button"
-      - "home -> places: (Tap Places tab)"
-      - "home -> activity: (Tap Activity tab)"
-  - id: preferences
+      - "article -> saved: Tap Save, then open Saved"
+      - "article -> tabs-overview: Tap Tabs"
+      - "home -> places: Tap Places tab"
+      - "home -> activity: Tap Activity tab"
+  - id: account
     topic: settings
-    title: "5 · Profile and settings"
-    description: Profile menu, settings and languages.
+    title: "5 · Account and settings"
+    description: Profile menu, settings, languages, legal links.
     edges:
       - "home -> profile: Tap the profile icon"
       - "profile -> settings: Tap Settings"
       - "settings -> settings-languages: Tap My languages"
-      - "settings -> privacy-policy: (Tap Privacy policy)"
-  - id: support-money
-    topic: payments
-    title: "6 · Donate"
-    description: The Donate row in the profile menu.
-    edges:
+      - "settings -> privacy-policy: Tap Privacy policy"
       - "profile -> donate: Tap Donate"
-  - id: dark
-    topic: settings
-    title: "7 · Dark theme"
-    description: The same screens with the app theme set to dark.
-    edges:
-      - "dark-home -> dark-search-results: Tap search and type a query"
-      - "dark-search-results -> dark-article: Tap a result"
 
 screens:
   - id: ob-intro
@@ -168,26 +152,22 @@ screens:
     title: Onboarding - feed preference
     flow: first-run
     image: screens/ob-feed.png
-  - id: profile
-    title: Account menu
-    flow: preferences
-    image: screens/profile.png
   - id: login
     title: Log in form
-    flow: login
+    flow: logged-out
     image: screens/login.png
   - id: activity
     title: Activity (logged out)
-    flow: login
+    flow: logged-out
     image: screens/activity.png
   - id: home
-    title: Explore feed - Community
+    title: Explore feed
     flow: reading
     image: screens/home.png
-  - id: home-foryou
+  - id: foryou
     title: Explore feed - For You
     flow: reading
-    image: screens/home-foryou.png
+    not_captured: "In the offline UI-test run this tab showed an empty feed and a server-error alert, so no screenshot is kept."
   - id: article
     title: Article
     flow: reading
@@ -212,59 +192,52 @@ screens:
     title: Article - change language
     flow: reading
     image: screens/article-languages.png
-  - id: image-gallery
+  - id: gallery
     title: Lead image viewer
     flow: reading
-    not_captured: "The viewer needs live network access; in the offline UI-test fixture run it only showed a server-error alert, so no screenshot is kept."
+    not_captured: "The viewer needs live network access; in the offline run it opened empty, so no screenshot is kept."
   - id: search
     title: Search tab
-    flow: discover
+    flow: library
     image: screens/search.png
   - id: search-results
     title: Search results
-    flow: discover
+    flow: library
     image: screens/search-results.png
   - id: saved
     title: Saved (empty)
-    flow: discover
+    flow: library
     image: screens/saved.png
   - id: tabs-overview
     title: Article tabs overview
-    flow: discover
+    flow: library
     image: screens/tabs-overview.png
   - id: places
     title: Places map
-    flow: discover
+    flow: library
     not_captured: "The map opens centred on the capturing device's region, so the screenshot is not published."
+  - id: profile
+    title: Account menu
+    flow: account
+    image: screens/profile.png
   - id: settings
     title: Settings
-    flow: preferences
+    flow: account
     image: screens/settings.png
   - id: settings-languages
     title: Settings - Wikipedia languages
-    flow: preferences
+    flow: account
     image: screens/settings-languages.png
   - id: privacy-policy
     title: Privacy policy
-    flow: preferences
+    flow: account
     topic: support
     not_captured: Opens a Wikimedia Foundation web page outside the app; not part of the app UI.
   - id: donate
     title: Donation page
-    flow: support-money
+    flow: account
+    topic: payments
     not_captured: "In-app web view of the Wikimedia donation form; it shows the visitor's country and currency, so no screenshot is kept."
-  - id: dark-home
-    title: Explore feed (dark)
-    flow: dark
-    image: screens/dark-home.png
-  - id: dark-search-results
-    title: Search results (dark)
-    flow: dark
-    image: screens/dark-search-results.png
-  - id: dark-article
-    title: Article (dark)
-    flow: dark
-    image: screens/dark-article.png
 
 stories:
   - id: US-01
@@ -273,7 +246,7 @@ stories:
     so_that: I know what I am getting
     screens: [ob-intro]
     status: built
-    verified: "simulator (app UI-test run), 2026-10-15"
+    verified: "simulator, onboarding UI test, 2026-10-15"
     where: WikipediaUITests/AppOnboardingUITests
     notes: Welcome page with a Learn more link.
   - id: US-02
@@ -283,8 +256,8 @@ stories:
     screens: [ob-privacy]
     status: built
     verified: "simulator, 2026-10-15"
-    where: WMFComponents/.../Onboarding (WMFOnboardingView)
-    notes: Links to privacy policy and terms of use are on this page; the linked pages were not opened.
+    where: WMFComponents (onboarding views)
+    notes: Links to the privacy policy and terms of use sit on this page; they were not opened.
   - id: US-03
     persona: multilingual
     want: to pick the languages I read in
@@ -302,7 +275,7 @@ stories:
     status: built
     verified: "simulator, 2026-10-15"
     where: Wikipedia/Code/AppOnboardingCoordinator.swift
-    notes: Interests page offers a search box and article suggestions.
+    notes: The interests page has a search box and article suggestions.
   - id: US-05
     persona: newcomer
     want: to choose between community-based and personalised feed content
@@ -311,17 +284,17 @@ stories:
     status: built
     verified: "simulator, 2026-10-15"
     where: Wikipedia/Code/AppOnboardingCoordinator.swift
-    notes: Page text says personalised content needs interests to be added.
+    notes: The page says personalised content needs interests to be added.
   - id: US-06
     persona: newcomer
     want: to skip the personalisation steps
-    so_that: I get to the feed faster
+    so_that: I reach the feed faster
     screens: [ob-personalize, ob-interests, ob-feed]
     status: unverified
-    notes: A Skip button is visible on these pages but was not tapped in this run.
+    notes: A Skip button is visible on these pages; it was not tapped in this run.
   - id: US-07
     persona: reader
-    want: to use the app without creating an account
+    want: to use the app without an account
     so_that: I can read straight away
     screens: [home, article, search-results]
     status: built
@@ -329,99 +302,84 @@ stories:
     where: Wikipedia/Code/WMFAppViewController.swift
     notes: Every captured screen was reached logged out.
   - id: US-08
-    persona: contributor
-    want: to open a login form from the account menu
-    so_that: I can sign in to my account
-    screens: [login, profile]
+    persona: reader
+    want: to log in or join Wikipedia when I choose to
+    so_that: I can use account features
+    screens: [profile, login]
     status: built
     verified: "simulator, 2026-10-15"
     where: Wikipedia/Code/WMFLoginViewController.swift
-    notes: The form was opened and left empty; no sign-in was attempted.
+    notes: The form was opened but nothing was typed or submitted.
   - id: US-09
     persona: reader
-    want: to be invited to log in when I open Activity
-    so_that: I understand why the tab is empty
-    screens: [activity]
+    want: to know why the Activity tab is empty without an account
+    so_that: I understand what logging in unlocks
+    screens: [activity, login]
     status: built
     verified: "simulator, 2026-10-15"
-    where: WMFComponents/.../Activity Tab
-    notes: Logged-out Activity shows only a "Log in / Join Wikipedia" prompt.
+    where: Activity tab
+    notes: The tab shows a prompt with a Log in / Join Wikipedia button instead of content.
   - id: US-10
-    persona: contributor
-    want: to create an account
-    so_that: I can contribute
-    screens: [login]
-    status: unverified
-    notes: The login form text offers a Join Wikipedia link; the sign-up screen was not opened.
-  - id: US-11
     persona: reader
-    want: to see a featured article and top reads when I open the app
-    so_that: I always have something to read
+    want: to browse a feed of articles and picks on the Explore tab
+    so_that: I find something to read without searching
     screens: [home]
     status: built
     verified: "simulator, 2026-10-15"
-    where: WMFComponents (Explore feed)
-    notes: Captured with the app's offline UI-test fixtures, not live content.
+    where: Wikipedia/Code/ExploreViewController.swift
+    notes: Content in the screenshots is the app's bundled UI-test fixture data.
+  - id: US-11
+    persona: reader
+    want: to switch the feed to a personalised "For You" view
+    so_that: suggestions follow my interests
+    screens: [foryou]
+    status: unverified
+    notes: The For You tab opens but showed an empty feed and a server error in the offline run.
   - id: US-12
     persona: reader
-    want: to switch the feed to a personalised For You view
-    so_that: I see suggestions tied to my reading
-    screens: [home-foryou]
-    status: built
-    verified: "simulator, 2026-10-15"
-    where: Wikipedia/Code/ExploreViewController.swift
-    notes: The For You view opened and showed a place article and a reading suggestion.
-  - id: US-13
-    persona: reader
-    want: to open and read an article
-    so_that: I can learn about a topic
+    want: to read an article with its lead image and text
+    so_that: I get the answer to my question
     screens: [article]
     status: built
     verified: "simulator, 2026-10-15"
-    where: Wikipedia/Code (article view)
-  - id: US-14
+    where: Wikipedia/Code/ArticleViewController.swift
+  - id: US-13
     persona: reader
-    want: to jump to a section from the table of contents
-    so_that: I do not have to scroll a long article
+    want: to jump to a section from a table of contents
+    so_that: I skip to the part I need
     screens: [article-toc]
     status: built
     verified: "simulator, 2026-10-15"
-    where: Wikipedia/Code (article contents panel)
-    notes: The contents panel opens; tapping a section was not part of this capture run.
-  - id: US-15
+    where: Wikipedia/Code/ArticleViewController+TableOfContents.swift
+    notes: The contents panel opened; jumping to a section was not tapped.
+  - id: US-14
     persona: reader
     want: to change text size and reading theme
-    so_that: the page is comfortable to read
+    so_that: the article is comfortable to read
     screens: [article-theme]
     status: built
     verified: "simulator, 2026-10-15"
     where: Wikipedia/Code/ReadingThemesControlsViewController.swift
-  - id: US-16
+    notes: The panel shows a brightness slider, text-size slider and theme chips.
+  - id: US-15
     persona: reader
     want: to find a word inside an article
-    so_that: I can locate the part I need
+    so_that: I can locate a passage quickly
     screens: [article-find]
     status: built
     verified: "simulator, 2026-10-15"
-    where: Wikipedia/Code (article find in page)
-    notes: Searching for a word highlighted matches and showed a match counter.
-  - id: US-17
+    where: Wikipedia/Code/ArticleViewController+FindInPage.swift
+    notes: Searching "wolf" highlighted matches in the text.
+  - id: US-16
     persona: multilingual
-    want: to see which other languages an article exists in
-    so_that: I can read it in my language
+    want: to open the same article in another language
+    so_that: I can read it in the language I prefer
     screens: [article-languages]
     status: built
     verified: "simulator, 2026-10-15"
-    where: Wikipedia/Code (article language picker)
-    notes: The language list opens; switching language was not exercised in this run.
-  - id: US-18
-    persona: reader
-    want: to view the lead image full screen
-    so_that: I can see the picture properly
-    screens: [image-gallery]
-    status: unverified
-    notes: In the offline fixture run the viewer showed a server-error alert; needs a live-network run.
-  - id: US-19
+    where: Wikipedia/Code/WMFLanguagesViewController.m
+    notes: The picker lists languages; picking one was not tested.
+  - id: US-17
     persona: reader
     want: to find article tools (share, watch, talk page, history, edit source) in a menu
     so_that: I can use them without leaving the article
@@ -430,7 +388,14 @@ stories:
     verified: "simulator, 2026-10-15"
     where: Wikipedia/Code/ArticleViewController+ArticleToolbarHandling.swift
     notes: The menu lists the actions; none of them was run.
-  - id: US-20
+  - id: US-18
+    persona: reader
+    want: to view the lead image full screen
+    so_that: I can see the picture properly
+    screens: [gallery]
+    status: unverified
+    notes: Needs a live-network run; the offline viewer opened empty.
+  - id: US-19
     persona: reader
     want: to search Wikipedia and get matching articles
     so_that: I can look something up
@@ -438,23 +403,15 @@ stories:
     status: built
     verified: "simulator, 2026-10-15"
     where: Wikipedia/Code/SearchViewController.swift
-  - id: US-21
-    persona: reader
-    want: to see my recent searches
-    so_that: I can repeat one quickly
-    screens: [search]
-    status: built
-    verified: "simulator, 2026-10-15"
-    where: Wikipedia/Code/SearchViewController.swift
-    notes: A history entry for the earlier search was listed.
-  - id: US-22
+    notes: A search for "Dog" returned the article, and the previous search showed under History.
+  - id: US-20
     persona: commuter
     want: to save an article for later
     so_that: I can read it without a connection
     screens: [article, saved]
     status: unverified
-    notes: The save control changed state in a UI-test step, but the saved list with an article was not captured and offline reading was not tested.
-  - id: US-23
+    notes: The Saved tab was captured empty only; saving an article and offline reading were not captured.
+  - id: US-21
     persona: commuter
     want: to see an explanation when nothing is saved yet
     so_that: I know how the list fills up
@@ -463,7 +420,7 @@ stories:
     verified: "simulator, 2026-10-15"
     where: Wikipedia/Code/SavedViewController.swift
     notes: Empty state reads "No saved pages yet".
-  - id: US-24
+  - id: US-22
     persona: reader
     want: to keep several articles open in tabs
     so_that: I can switch between them
@@ -471,15 +428,15 @@ stories:
     status: built
     verified: "simulator, 2026-10-15"
     where: Wikipedia/Code/TabsOverviewCoordinator.swift
-    notes: Overview shows one tab card; switching and closing were not tested.
-  - id: US-25
+    notes: The overview shows one tab card; switching and closing were not tested.
+  - id: US-23
     persona: reader
     want: to find articles near a place on a map
     so_that: I can explore my surroundings
     screens: [places]
     status: unverified
-    notes: The Places tab opens a map, but its screenshot is withheld and nearby results need location access that was not granted.
-  - id: US-26
+    notes: The Places tab opens a map; its screenshot is withheld and nearby results need location access that was not granted.
+  - id: US-24
     persona: multilingual
     want: to manage the languages used by the app
     so_that: the feed and search match how I read
@@ -487,22 +444,23 @@ stories:
     status: built
     verified: "simulator, 2026-10-15"
     where: Wikipedia/Code/WMFSettingsViewController.m
-  - id: US-27
+  - id: US-25
     persona: reader
     want: to use the app in a dark theme
     so_that: reading is easy on the eyes at night
-    screens: [dark-home, dark-search-results, dark-article]
+    screens: [home, article, settings]
     status: built
-    verified: "simulator (dark theme launch option), 2026-10-15"
-    where: Wikipedia/Code/WMFSettingsViewController.m (app theme)
-  - id: US-28
+    verified: "simulator (UI-test configuration English (Dark)), 2026-10-15"
+    where: UI-test launch option -WMFAppThemeName dark
+    notes: Every screenshot in this map was captured with the dark theme.
+  - id: US-26
     persona: reader
     want: to find the donate option in the account menu
     so_that: I can support Wikipedia
-    screens: [donate, profile]
+    screens: [profile, donate]
     status: partly
     notes: The Donate row opens an in-app web view of the donation form; that page is outside the app UI and was not exercised beyond opening it.
-  - id: US-29
+  - id: US-27
     persona: reader
     want: to read the privacy policy and terms of use
     so_that: I know the rules
@@ -514,30 +472,30 @@ gaps:
   - id: G-01
     severity: medium
     title: Logged-out Activity tab is only a login prompt
-    detail: Without an account the Activity tab offers no content, so a quarter of the tab bar is empty for readers who never sign in.
+    detail: Without an account the Activity tab offers no content, so a fifth of the tab bar is empty for readers who never sign in.
     where: Activity tab
     stories: [US-09]
   - id: G-02
     severity: medium
-    title: Lead image viewer needs live network
-    detail: In the offline UI-test fixture run the full-screen viewer showed "The app received an unexpected response from the server."
-    where: Article lead image
-    stories: [US-18]
+    title: For You feed and lead image viewer need live network
+    detail: In the offline UI-test run the For You tab showed an empty feed with "The app received an unexpected response from the server", and the image viewer opened empty.
+    where: Explore feed, article lead image
+    stories: [US-11, US-18]
   - id: G-03
     severity: low
     title: Places map is empty without location permission
     detail: The Places tab showed a map with "No results found" until location access is granted.
     where: Places tab
-    stories: [US-25]
+    stories: [US-23]
   - id: G-04
     severity: low
     title: Saved-with-article state not captured
-    detail: Only the empty Saved list was verified; the state after saving an article has no screenshot.
+    detail: Only the empty Saved list was verified; the capture step that saves an article timed out, so the filled state has no screenshot.
     where: Saved tab
-    stories: [US-22]
+    stories: [US-20]
   - id: G-05
     severity: low
     title: Screenshots use fixture content
     detail: Feed and article content comes from the app's bundled UI-test fixtures, not live Wikipedia data, so it may differ from what users see today.
     where: Explore feed, article
-    stories: [US-11, US-13]
+    stories: [US-10, US-12]
