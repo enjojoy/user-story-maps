@@ -44,7 +44,7 @@ SEVERITIES = ["high", "medium", "low"]
 PLATFORMS = ["ios", "android", "web"]
 DEVICE_MODELS = ("iphone-island", "iphone-notch", "iphone-home-button", "android-generic", "browser-window", "tablet", "none")
 DEVICE_STYLES = ("auto", "black", "titanium", "light")
-HTML_BUDGET = 4_500_000   # bytes of embedded images + fonts; story-map.html stays under about 5 MB
+HTML_BUDGET = 1_500_000   # progressive HTML previews; exported diagrams retain native screenshot resolution
 SOURCE_NAMES = ("stories.yaml", "stories.yml", "stories.json")
 FORMATS = ("html", "arch", "onepager", "report", "csv", "mermaid", "dot", "flows", "flow-map", "overview", "pdf", "crops", "legacy-md")
 LEAN_FORMATS = set(("html", "arch", "onepager", "report"))
@@ -2521,7 +2521,7 @@ def screen_aspect(m, s):
     return round(w / h, 4) if w and h else None
 
 
-def embed_image(m, s, max_h=1000, max_w=1400, quality=85):
+def embed_image(m, s, max_h=1040, max_w=480, quality=72):
     """Screenshot as a data: URI (downscaled when Pillow is available)."""
     p = image_path(m, s)
     if not p or not os.path.isfile(p):
@@ -2531,7 +2531,7 @@ def embed_image(m, s, max_h=1000, max_w=1400, quality=85):
         if im.height > max_h or im.width > max_w:   # shrink to fit, same aspect ratio
             im = im.resize(contain(im.width, im.height, max_w, max_h), Image.LANCZOS)
         a = io.BytesIO()
-        im.save(a, "PNG", optimize=True)
+        im.quantize(colors=128).save(a, "PNG", optimize=True)
         b = io.BytesIO()
         im.save(b, "JPEG", quality=quality, optimize=True)
         if len(b.getvalue()) < len(a.getvalue()):
@@ -2542,16 +2542,17 @@ def embed_image(m, s, max_h=1000, max_w=1400, quality=85):
         return "data:image/%s;base64,%s" % ("jpeg" if ext in ("jpg", "jpeg") else "png", base64.b64encode(f.read()).decode())
 
 
-def embed_diagram(path, max_w=3600, quality=85):
+def embed_diagram(path, max_w=2400, quality=72):
     """A generated diagram as a data: URI; wide diagrams are downscaled (JPEG) so the viewer stays small."""
     if not os.path.isfile(path):
         return ""
     if HAVE_PIL:
-        im = Image.open(path).convert("RGB")
+        with Image.open(path) as source:
+            im = source.convert("RGB")
         if im.width > max_w:
             im = im.resize((max_w, max(1, round(im.height * max_w / im.width))), Image.LANCZOS)
         b = io.BytesIO()
-        im.save(b, "JPEG", quality=quality, optimize=True, subsampling=0)
+        im.save(b, "JPEG", quality=quality, optimize=True)
         a = io.BytesIO()
         im.save(a, "PNG", optimize=True)
         if len(b.getvalue()) < len(a.getvalue()):
@@ -2597,20 +2598,23 @@ main{padding:20px}section.flow{margin-bottom:34px}section.flow h2{margin:0 0 4px
 table{border-collapse:collapse;width:100%;background:#fff}th,td{border:1px solid var(--line);padding:7px 9px;vertical-align:top;text-align:left}
 th{background:#eef1f3;position:sticky;top:105px}tr.hide{display:none}td.st{white-space:nowrap}
 .thumbs{white-space:nowrap}.thumbs .dv{display:inline-block;height:96px;width:auto;margin:2px 4px;filter:drop-shadow(0 2px 3px rgba(10,12,20,.3))}
+.thumbs.small .dv{height:48px}.story-row{cursor:pointer}.story-row:hover{background:#f1f3f4}.story-details td{padding:14px}.story-details p{margin:0 0 8px}.story-details .row{margin-top:12px}
 .pill{color:#fff;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600}
 .grid{display:grid;gap:10px;align-items:start}.grid>div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px;min-height:44px}
 .grid .h{background:#eef1f3;font-weight:700}.grid .mini{display:inline-block;margin:2px}
 .gap{background:#fff;border:1px solid var(--line);border-left:6px solid;border-radius:8px;padding:10px 14px;margin-bottom:10px}
 #lb{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;flex-direction:column;z-index:20}
-#lb img#lbi{max-width:92vw;max-height:84vh;border-radius:8px}#lb #lbd .dv{height:78vh;width:auto;max-width:92vw;margin:0;cursor:default;filter:drop-shadow(0 10px 24px rgba(0,0,0,.6))}#lb .cap{color:#fefefe;margin-top:10px;text-align:center}
-#lb button{position:absolute;top:50%;background:#fff3;color:#fefefe;border:0;font-size:34px;padding:8px 14px;cursor:pointer;border-radius:8px}
+#lbcontent{display:flex;gap:22px;align-items:center;max-width:92vw;max-height:84vh}#lb img#lbi{max-width:92vw;max-height:84vh;border-radius:8px}#lb #lbd .dv{height:76vh;width:auto;max-width:65vw;margin:0;cursor:default;filter:drop-shadow(0 10px 24px rgba(0,0,0,.6))}#lb .cap{color:#fefefe;margin-top:10px;text-align:center}#lb .cap a{color:inherit}
+#lbdetails{width:310px;max-height:78vh;overflow:auto;background:var(--bg);color:var(--ink);padding:16px;border-radius:8px}#lbdetails h2{margin:0 0 8px}#lbdetails p{overflow-wrap:anywhere}#lbdetails a{color:inherit}#lbdetails ul{padding-left:20px}
+#lb>button{position:absolute;top:50%;background:#fff3;color:#fefefe;border:0;font-size:34px;padding:8px 14px;cursor:pointer;border-radius:8px}#lb>button.close{top:10px;right:14px;font-size:24px}
+@media(max-width:720px){#lbcontent{flex-direction:column;overflow:auto;align-items:center}#lb #lbd .dv{height:50vh;max-width:85vw}#lbdetails{width:85vw;max-height:none;flex:none}#lb>button{padding:4px}}
 .hidden{display:none}
 .tpc{font-size:11px;font-weight:700;padding:2px 10px;letter-spacing:.03em}
 .tpill{border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600;white-space:nowrap;border:2px solid}
 .topic{margin:6px 0 26px}.topic>h2.tb{margin:0 0 10px;padding:8px 14px;border-left:10px solid;border-radius:8px;font-size:22px}
 .topic>h2.tb small{font-size:13px;font-weight:400;color:var(--mut);margin-left:10px}
 .topic section.flow h2{font-size:18px}
-.arch img{max-width:100%;background:#fff;border:1px solid var(--line);cursor:zoom-in;border-radius:8px}
+.arch>img{max-width:100%;background:#fff;border:1px solid var(--line);cursor:zoom-in;border-radius:8px}
 .conn{margin:12px 0;padding:0;list-style:none}.conn li{margin:4px 0}
 .arrow{font-weight:700}
 </style></head><body>
@@ -2618,10 +2622,10 @@ th{background:#eef1f3;position:sticky;top:105px}tr.hide{display:none}td.st{white
 <div class="bar" id="bar"></div>
 <div class="tabs" id="tabs"></div></header>
 <main id="main"></main>
-<div id="lb"><button style="left:14px" onclick="lbStep(-1)">&#8249;</button><img id="lbi"><div id="lbd" style="display:none"></div><div class="cap" id="lbc"></div><button style="right:14px" onclick="lbStep(1)">&#8250;</button></div>
+<div id="lb"><button class="close" aria-label="Close" onclick="closeLb()">&#10005;</button><button style="left:14px" aria-label="Previous screen" onclick="lbStep(-1,event)">&#8249;</button><div id="lbcontent" onclick="event.stopPropagation()"><img id="lbi" alt="Diagram preview"><div id="lbd" style="display:none"></div><aside id="lbdetails"></aside></div><div class="cap" id="lbc" onclick="event.stopPropagation()"></div><button style="right:14px" aria-label="Next screen" onclick="lbStep(1,event)">&#8250;</button></div>
 <script>
 const D=__DATA__, IMG=__IMGS__, OVL=__OVL__, PH=__PH__;
-const S={st:new Set(Object.keys(D.statuses)),persona:'',topic:'',q:'',tab:'arch'};
+const S={st:new Set(Object.keys(D.statuses)),persona:'',topic:'',q:'',tab:'arch'}, OPEN=new Set();
 const TOPICS=Object.fromEntries(D.topics.map(t=>[t.id,t]));const tc=id=>(TOPICS[id]||{color:'#999'}).color;const tt=id=>(TOPICS[id]||{title:id||'Unassigned'}).title;
 const TABS=['arch','flows','stories','map','gaps',...(IMG.__overview?['overview']:[])];
 const $=(h)=>{const t=document.createElement('template');t.innerHTML=h.trim();return t.content.firstChild};
@@ -2644,8 +2648,9 @@ function bar(){const b=document.getElementById('bar');b.innerHTML='';
   if(k==='overview'&&!IMG.__overview)continue;
   const x=$(`<button class="${S.tab===k?'on':''}">${l}</button>`);x.onclick=()=>{S.tab=k;render()};t.append(x)}}
 const pc=v=>(v*100).toFixed(3)+'%';
-function dev(id,click){const s=D.screens[id],f=s.frame,oc=click===false?'':` onclick="lb('${id}')"`;
+function dev(id,click){const s=D.screens[id],f=s.frame,oc=click===false?'':` onclick="event.stopPropagation();lb('${id}')"`;
  if(f&&IMG[id]){const r=f.rect;return `<div class="dv" style="--ar:${f.w/f.h}"${oc}><img class="s" src="${IMG[id]}" alt="${esc(s.title)}" style="left:${pc(r[0]/f.w)};top:${pc(r[1]/f.h)};width:${pc(r[2]/f.w)};height:${pc(r[3]/f.h)};border-radius:${pc(f.rx)}/${pc(f.ry)}"><img class="f" src="${OVL[f.ov]}" alt=""></div>`}
+ if(IMG[id])return `<div class="dv" style="--ar:${s.aspect||1}"${oc}><img class="s" src="${IMG[id]}" alt="${esc(s.title)}" style="inset:0;width:100%;height:100%"></div>`;
  if(PH[id])return `<div class="dv ph" style="--ar:${PH[id][1]/PH[id][2]}"><img class="f" src="${PH[id][0]}" alt="Not captured: ${esc(s.not_captured||'screenshot missing')}"></div>`;
  return `<div class="ph">Not captured:<br>${esc(s.not_captured||'screenshot missing')}</div>`}
 const badge=s=>`<div class="bd${D.badge==='label'?'':' nolabel'}" title="${D.statuses[s].label}"><i style="background:${col(s)}"></i><span>${D.statuses[s].label}</span></div>`;
@@ -2656,14 +2661,17 @@ function card(id){const s=D.screens[id],c=col(s.status);
  return `<div class="card ${s.aspect>=1.15?'land ':s.aspect>=0.85?'sq ':s.aspect&&s.aspect<0.3?'tall ':''}${scm(s)?'':'dim'}" id="scr-${esc(id)}"><div class="tpc" style="background:${tc(s.topic)}22;color:${tc(s.topic)}">${esc(tt(s.topic))}</div><div class="ti">${esc(s.title)}</div><div class="id">${esc(id)}</div>${img}${badge(s.status)}<ul class="out">${out}</ul><div class="chips">${ch}</div></div>`}
 function vFlows(){return D.topics.filter(t=>!S.topic||S.topic===t.id).map(t=>{const fl=D.flows.filter(f=>f.topic===t.id);if(!fl.length)return '';
  return `<div class="topic"><h2 class="tb" style="border-color:${t.color};background:${t.color}1a;color:${t.color}">${esc(t.title)}<small>${esc(t.description)}</small></h2>${fl.map(f=>`<section class="flow"><h2>${esc(f.title)}</h2><p class="desc">${esc(f.description)}</p><div class="row">${f.screens.map(card).join('')||'<i>No screens</i>'}</div></section>`).join('')}</div>`}).join('')}
-function vArch(){const rows=D.topics.map(t=>`<tr><td><span class="tpill" style="border-color:${t.color};color:${t.color}">${esc(t.title)}</span><div class="sub">${esc(t.description)}</div></td><td>${t.nscreens}</td><td>${t.nstories}</td>${Object.keys(D.statuses).map(k=>`<td style="color:${col(k)};font-weight:600">${t.counts[k]||0}</td>`).join('')}</tr>`).join('');
+function vArch(){const rows=D.topics.map(t=>`<tr><td><span class="tpill" style="border-color:${t.color};color:${t.color}">${esc(t.title)}</span><div class="sub">${esc(t.description)}</div></td><td>${t.nscreens}<div class="thumbs small">${Object.keys(D.screens).filter(id=>D.screens[id].topic===t.id&&IMG[id]).map(id=>dev(id)).join('')}</div></td><td>${t.nstories}</td>${Object.keys(D.statuses).map(k=>`<td style="color:${col(k)};font-weight:600">${t.counts[k]||0}</td>`).join('')}</tr>`).join('');
  const conns=D.connections.map(c=>`<li><span class="tpill" style="border-color:${tc(c.from)};color:${tc(c.from)}">${esc(tt(c.from))}</span> <span class="arrow">&rarr;</span> <span class="tpill" style="border-color:${tc(c.to)};color:${tc(c.to)}">${esc(tt(c.to))}</span> <span class="sub">${c.labels.map(esc).join(' &middot; ')}</span></li>`).join('');
  return `<div class="arch"><p class="desc">How the app is organised: topic areas and the places users cross from one to another.</p>${IMG['__arch']?`<img src="${IMG['__arch']}" onclick="lb('__arch')" alt="Architecture diagram">`:'<i>Architecture diagram not generated.</i>'}
  <h3>Topics</h3><table><thead><tr><th>Topic</th><th>Screens</th><th>Stories</th>${Object.keys(D.statuses).map(k=>`<th style="color:${col(k)}">${D.statuses[k].label}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>
  <h3>Connections between topics</h3><ul class="conn">${conns||'<li><i>No cross-topic navigation recorded.</i></li>'}</ul></div>`}
-function vStories(){const rows=D.stories.map(u=>{const th=u.screens.map(s=>(D.screens[s]&&D.screens[s].frame&&IMG[s])?dev(s):`<span class="mini" style="background:#8a8f98">${esc((D.screens[s]||{}).title||s)}</span>`).join('');
- return `<tr id="st-${esc(u.id)}" class="${sm(u)?'':'hide'}"><td>${esc(u.id)}</td><td><span class="tpill" style="border-color:${tc(u.topic)};color:${tc(u.topic)}">${esc(tt(u.topic))}</span></td><td>${esc(u.personaName)}</td><td>${esc(u.text)}</td><td class="thumbs">${th}</td><td class="st"><span class="pill" style="background:${col(u.status)}">${D.statuses[u.status]?D.statuses[u.status].label:esc(u.status)}</span></td><td>${esc(u.where)}</td><td>${esc(u.verified)}</td><td>${esc(u.notes)}</td></tr>`}).join('');
- return `<table><thead><tr><th>ID</th><th>Topic</th><th>Persona</th><th>User story</th><th>Screens</th><th>Status</th><th>Where it lives</th><th>Verified</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table>`}
+function toggleStory(id){OPEN.has(id)?OPEN.delete(id):OPEN.add(id);const row=document.getElementById('st-'+id),details=document.getElementById('detail-'+id);row.setAttribute('aria-expanded',String(OPEN.has(id)));details.classList.toggle('hidden',!OPEN.has(id))}
+function storyKey(e,id){if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleStory(id)}}
+function vStories(){const rows=D.stories.map(u=>{const th=u.screens.map(s=>(D.screens[s]&&IMG[s])?dev(s):`<span class="mini" style="background:#8a8f98">${esc((D.screens[s]||{}).title||s)}</span>`).join('');
+ const detail=[['Where it lives',u.where],['Verified',u.verified],['Notes',u.notes]].filter(([k,v])=>v).map(([k,v])=>`<p><b>${k}:</b> ${esc(v)}</p>`).join('');
+ return `<tr id="st-${esc(u.id)}" class="story-row ${sm(u)?'':'hide'}" tabindex="0" aria-expanded="${OPEN.has(u.id)}" aria-controls="detail-${esc(u.id)}" onclick="toggleStory('${u.id}')" onkeydown="storyKey(event,'${u.id}')"><td>${esc(u.id)}</td><td><span class="tpill" style="border-color:${tc(u.topic)};color:${tc(u.topic)}">${esc(tt(u.topic))}</span></td><td>${esc(u.text)}</td><td class="thumbs small">${th}</td><td class="st"><span class="pill" style="background:${col(u.status)}">${D.statuses[u.status]?D.statuses[u.status].label:esc(u.status)}</span></td></tr><tr id="detail-${esc(u.id)}" class="story-details ${sm(u)&&OPEN.has(u.id)?'':'hidden'}"><td colspan="5">${detail||'<p>No evidence or notes recorded.</p>'}<div class="row">${u.screens.filter(id=>D.screens[id]).map(card).join('')}</div></td></tr>`}).join('');
+ return `<table><thead><tr><th>ID</th><th>Topic</th><th>Story</th><th>Screens</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`}
 function vMap(){const cols=D.flows.map(f=>({id:f.id,t:f.title,topic:f.topic}));if(D.stories.some(u=>!D.flows.find(f=>f.id===u.flow)))cols.push({id:'',t:'Unassigned'});
  let h=`<div class="grid" style="grid-template-columns:160px repeat(${cols.length},minmax(150px,1fr))"><div class="h"></div>${cols.map(c=>`<div class="h" style="border-top:5px solid ${tc(c.topic)}">${esc(c.t)}<div class="sub">${esc(tt(c.topic))}</div></div>`).join('')}`;
  for(const p of D.personas){h+=`<div class="h">${esc(p.name)}</div>`;for(const c of cols){
@@ -2671,17 +2679,21 @@ function vMap(){const cols=D.flows.map(f=>({id:f.id,t:f.title,topic:f.topic}));i
  return h+'</div>'}
 function vGaps(){return D.gaps.map(g=>`<div class="gap" style="border-color:${D.sev[g.severity]||'#999'}"><b>${esc(g.id)} &middot; ${esc(g.title)}</b> <span class="sub">(${esc(g.severity)})</span><div>${esc(g.detail)}</div>${g.where?`<div class="sub">Where: ${esc(g.where)}</div>`:''}${g.stories.length?`<div class="sub">Stories: ${g.stories.map(esc).join(', ')}</div>`:''}</div>`).join('')||'<i>No gaps recorded.</i>'}
 function vOver(){return (IMG['__overview']?`<img src="${IMG['__overview']}" style="max-width:100%;background:#fff;border:1px solid var(--line);cursor:zoom-in" onclick="lb('__overview')">`:'<i>Overview diagram not generated.</i>')}
-function render(){bar();const m=document.getElementById('main');m.innerHTML={arch:vArch,flows:vFlows,stories:vStories,map:vMap,gaps:vGaps,overview:vOver}[S.tab]()}
-function go(id){S.tab='flows';render();const e=document.getElementById('scr-'+id);if(e){e.scrollIntoView({behavior:'smooth',inline:'center',block:'center'});e.classList.add('flash')}}
-function goStory(id){S.tab='stories';render();const e=document.getElementById('st-'+id);if(e){e.scrollIntoView({behavior:'smooth',block:'center'});e.classList.add('flash')}}
-let cur=null;const keys=()=>Object.keys(IMG).filter(k=>!k.startsWith('__')&&D.screens[k]&&D.screens[k].frame);
-function lb(id){cur=id;const L=document.getElementById('lb'),fr=D.screens[id]&&D.screens[id].frame&&IMG[id];document.getElementById('lbi').style.display=fr?'none':'';document.getElementById('lbd').style.display=fr?'block':'none';
- if(fr)document.getElementById('lbd').innerHTML=dev(id,false);else document.getElementById('lbi').src=IMG[id];
- document.getElementById('lbc').textContent=id==='__arch'?'Architecture by topic':(D.screens[id]||{title:'Flows overview'}).title;L.style.display='flex'}
-function lbStep(d){event.stopPropagation();const k=keys();if(!k.includes(cur))return;lb(k[(k.indexOf(cur)+d+k.length)%k.length])}
-document.getElementById('lb').onclick=()=>{document.getElementById('lb').style.display='none'};
+function render(){bar();if(location.hash!=='#'+S.tab)history.replaceState(null,'','#'+S.tab);const m=document.getElementById('main');m.innerHTML={arch:vArch,flows:vFlows,stories:vStories,map:vMap,gaps:vGaps,overview:vOver}[S.tab]()}
+function go(id){closeLb();S.tab='flows';render();const e=document.getElementById('scr-'+id);if(e){e.scrollIntoView({behavior:'smooth',inline:'center',block:'center'});e.classList.add('flash')}}
+function goStory(id){closeLb();OPEN.add(id);S.tab='stories';render();const e=document.getElementById('st-'+id);if(e){e.scrollIntoView({behavior:'smooth',block:'center'});e.classList.add('flash')}}
+let cur=null;const keys=()=>Object.keys(IMG).filter(k=>!k.startsWith('__')&&D.screens[k]);
+function screenDetails(s){const out=s.out.map(o=>`<li>${o.dashed?'(optional) ':''}${esc(o.label||'go')} &rarr; <a href="#flows" onclick="go('${o.to}');return false">${esc((D.screens[o.to]||{}).title||o.to)}</a></li>`).join('');
+ const stories=s.stories.map(id=>{const u=D.stories.find(u=>u.id===id);return `<li><a href="#stories" onclick="goStory('${id}');return false">${esc(id)}</a>: ${esc(u.text)}</li>`}).join('');
+ return `<h2>${esc(s.title)}</h2>${badge(s.status)}${s.where?`<p><b>Where it lives:</b> ${esc(s.where)}</p>`:''}${s.notes?`<p><b>Notes:</b> ${esc(s.notes)}</p>`:''}<h3>Outgoing actions</h3>${out?`<ul>${out}</ul>`:'<p>No outgoing actions recorded.</p>'}<h3>Stories</h3>${stories?`<ul>${stories}</ul>`:'<p>No stories linked.</p>'}`}
+function lb(id){if(!IMG[id])return;cur=id;const L=document.getElementById('lb'),screen=D.screens[id],details=document.getElementById('lbdetails');document.getElementById('lbi').style.display=screen?'none':'';document.getElementById('lbd').style.display=screen?'block':'none';details.style.display=screen?'block':'none';
+ if(screen){document.getElementById('lbd').innerHTML=dev(id,false);details.innerHTML=screenDetails(screen)}else document.getElementById('lbi').src=IMG[id];
+ const title=id==='__arch'?'Architecture by topic':screen?screen.title:'Flows overview',full=D.full[id];document.getElementById('lbc').innerHTML=esc(title)+(full?` &middot; <a href="${esc(full)}" target="_blank" rel="noopener">Open full resolution (${esc(full)})</a>`:'');L.style.display='flex'}
+function closeLb(){document.getElementById('lb').style.display='none'}
+function lbStep(d,e){if(e)e.stopPropagation();const k=keys();if(!k.includes(cur))return;lb(k[(k.indexOf(cur)+d+k.length)%k.length])}
+document.getElementById('lb').onclick=closeLb;
 document.onkeydown=e=>{const L=document.getElementById('lb');if(L.style.display!=='flex')return;
- if(e.key==='Escape')L.style.display='none';if(e.key==='ArrowRight')lbStep(1);if(e.key==='ArrowLeft')lbStep(-1)};
+ if(e.key==='Escape')closeLb();if(e.key==='ArrowRight')lbStep(1,e);if(e.key==='ArrowLeft')lbStep(-1,e)};
 const h0=location.hash.slice(1);if(TABS.includes(h0))S.tab=h0;
 window.onhashchange=()=>{const h=location.hash.slice(1);if(TABS.includes(h)){S.tab=h;render()}};
 render();
@@ -2696,7 +2708,7 @@ def gen_html(m, gen, available=None):
     for e in m["edges"]:
         if e["src"] in m["S"] and e["dst"] in m["S"]:
             outs[e["src"]].append(dict(to=e["dst"], label=e["label"], dashed=e["dashed"]))
-    screens = {s["id"]: dict(title=s["title"], status=s["status"], not_captured=s["not_captured"], notes=s["notes"],
+    screens = {s["id"]: dict(title=s["title"], status=s["status"], not_captured=s["not_captured"], notes=s["notes"], where=s["where"],
                              out=outs[s["id"]], stories=m["used_by"].get(s["id"], []), topic=s["topic_eff"],
                              aspect=screen_aspect(m, s)) for s in m["screens"]}
     stories = [dict(id=u["id"], persona=u["persona"], personaName=persona_name(m, u["persona"]), text=story_text(m, u),
@@ -2735,26 +2747,41 @@ def gen_html(m, gen, available=None):
             b = io.BytesIO()
             pd["img"].save(b, "PNG", optimize=True)
             phs[s["id"]] = ["data:image/png;base64," + base64.b64encode(b.getvalue()).decode(), pd["size"][0], pd["size"][1]]
-    base_extra = len(font_face_css()) + sum(len(v) for v in ovl.values()) + sum(len(v[0]) for v in phs.values())
-    imgs, ov, ar = {}, "", ""
-    for max_h, q, dw in [(1000, 85, 3600), (900, 80, 3200), (800, 78, 2800), (700, 75, 2400), (600, 70, 2000), (500, 65, 1600)]:   # keep the page under ~5 MB
-        ov = embed_diagram(os.path.join(gen, "overview.png"), dw, q + 3) if available is None or "overview.png" in available else ""
-        ar = embed_diagram(os.path.join(gen, "architecture.png"), dw, q + 3) if available is None or "architecture.png" in available else ""
-        extra = base_extra + len(ov) + len(ar)
-        imgs = {s["id"]: embed_image(m, s, max_h, 1400, q) for s in m["screens"]}
-        imgs = {k: v for k, v in imgs.items() if v}
-        if extra + sum(len(v) for v in imgs.values()) < HTML_BUDGET:
-            break
-    if ov:
-        imgs["__overview"] = ov
-    if ar:
-        imgs["__arch"] = ar
-
     def js(o):
         return json.dumps(o, ensure_ascii=False).replace("</", "<\\/")
-    page = (HTML_TEMPLATE.replace("__FONTFACE__", font_face_css()).replace("__BODYFONT__", font_stack(TH["font"]))
-            .replace("__HEADFONT__", font_stack(TH["heading_font"])).replace("__TITLE__", html.escape(m["app"]["name"])).replace("__SUB__", html.escape(header_line(m) + ((" | " + m["app"]["disclaimer"]) if m["app"]["disclaimer"] else "")))
-            .replace("__DATA__", js(data)).replace("__IMGS__", js(imgs)).replace("__OVL__", js(ovl)).replace("__PH__", js(phs)))
+
+    data["full"] = {key: name for key, name in (("__arch", "architecture.png"), ("__overview", "overview.png"))
+                    if (available is None or name in available) and os.path.isfile(os.path.join(gen, name))}
+
+    def text_values(obj):
+        if isinstance(obj, dict):
+            return " ".join(text_values(v) for v in obj.values())
+        if isinstance(obj, list):
+            return " ".join(text_values(v) for v in obj)
+        return str(obj)
+
+    sub = header_line(m) + ((" | " + m["app"]["disclaimer"]) if m["app"]["disclaimer"] else "")
+    labels = ("Architecture Screens by topic Stories Story map Gaps & risks Flows overview All personas All topics "
+              "Search stories ID Topic Story Screens Status Where it lives Verified Notes Outgoing actions Topics "
+              "Connections between topics Not captured screenshot missing optional go Unassigned No screens No gaps recorded "
+              "No evidence or notes recorded No outgoing actions recorded No stories linked Open full resolution "
+              "How the app is organised: topic areas and the places users cross from one to another. "
+              "No cross-topic navigation recorded. Architecture diagram not generated. Overview diagram not generated. "
+              "Architecture by topic Flows overview → · ‹ › ✕")
+    css = font_face_css(text_values(data) + " " + sub + " " + labels)
+    base = (HTML_TEMPLATE.replace("__FONTFACE__", css).replace("__BODYFONT__", font_stack(TH["font"]))
+            .replace("__HEADFONT__", heading_font_stack()).replace("__TITLE__", html.escape(m["app"]["name"]))
+            .replace("__SUB__", html.escape(sub)).replace("__DATA__", js(data)).replace("__OVL__", js(ovl)).replace("__PH__", js(phs)))
+    # Only these in-page previews shrink. The source cache and exported PNG/PDF diagrams keep their native pixels.
+    for width, quality, arch_w, over_w in [(480, 72, 2400, 1800), (460, 68, 2200, 1700), (440, 64, 2000, 1600),
+                                            (420, 60, 1900, 1500), (400, 56, 1800, 1400), (380, 52, 1700, 1300), (360, 48, 1600, 1200)]:
+        imgs = {s["id"]: embed_image(m, s, 1040, width, quality) for s in m["screens"]}
+        imgs = {k: v for k, v in imgs.items() if v}
+        for key, name in data["full"].items():
+            imgs[key] = embed_diagram(os.path.join(gen, name), arch_w if key == "__arch" else over_w, quality)
+        page = base.replace("__IMGS__", js(imgs))
+        if len(page.encode("utf-8")) < HTML_BUDGET:
+            break
     write(os.path.join(gen, "story-map.html"), themeify(page))
 
 
@@ -2974,7 +3001,7 @@ DEFAULT_THEME = dict(dark=False, font="", heading_font="", fallback="sans-serif"
                      muted="#5F6368", muted2="#80868B", surface="#F7F8F9", surface2="#F1F3F4", border="#DADCE0",
                      primary="#2D7A5C", secondary="#C9733E", accent_dark="#1F5A43", gray="#9AA0A6",
                      portal_in="#DDF1E8", portal_out="#FFE9DD", border_accent="#B7DCCB",
-                     device=dict(style="auto", model="", badge="label", frames=""))
+                     embed_fonts=False, device=dict(style="auto", model="", badge="label", frames=""))
 TH = dict(DEFAULT_THEME, sev=dict(SEV_DEFAULT), font_files={})
 # default literal -> themed value, applied to generated text (dot / mermaid / html) and to PIL colours via TC()
 _LITERALS = {"#202124": "ink", "#3C4043": "ink2", "#5F6368": "muted", "#80868B": "muted2", "#F1F3F4": "surface2",
@@ -3159,6 +3186,14 @@ def apply_theme(m):
         raise SourceError("`theme:` must be a mapping")
     g = lambda k: _s(raw, k)
     th = dict(DEFAULT_THEME)
+    if "embed_fonts" in raw:
+        value = raw["embed_fonts"]
+        if isinstance(value, bool):
+            th["embed_fonts"] = value
+        elif isinstance(value, str) and value.lower() in ("true", "false"):
+            th["embed_fonts"] = value.lower() == "true"
+        else:
+            raise SourceError("theme.embed_fonts must be a bool (true or false)")
     status = {k: v["color"] for k, v in STATUS_DEFAULT.items()}
     sev = dict(SEV_DEFAULT)
     primary = g("primary") or g("accent")
@@ -3242,27 +3277,58 @@ def apply_theme(m):
 
 def font_stack(name, fallback=None):
     fb = fallback or TH["fallback"]
-    base = 'system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif' if fb == "sans-serif" else (
+    base = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif' if fb == "sans-serif" else (
         'Georgia,"Times New Roman",serif' if fb == "serif" else 'ui-monospace,Menlo,monospace')
     return ('"%s",%s' % (name, base)) if name else base
 
 
-def font_face_css():
-    """@font-face rules embedding resolved font files (only OFL/user-supplied files ever get here)."""
+def heading_font_stack():
+    serif = {"georgia", "times", "times new roman", "baskerville", "palatino", "palatino linotype", "garamond",
+             "cambria", "cochin", "charter", "didot", "hoefler text", "iowan old style", "new york", "merriweather",
+             "lora", "libre baskerville", "playfair display", "cormorant", "source serif pro", "source serif 4", "noto serif", "pt serif"}
+    return font_stack(TH["heading_font"], "serif" if TH["heading_font"].lower() in serif else None)
+
+
+def font_face_css(text=""):
+    """Opt-in WOFF2 subsets: body regular/bold and, when distinct, bold headings."""
+    if not TH.get("embed_fonts"):
+        return ""
+    try:
+        from fontTools import subset
+        from fontTools.ttLib import TTFont
+        import brotli  # noqa: F401; WOFF2 compression is optional
+    except ImportError:
+        print("  note  embedded fonts need fontTools and brotli; using system fonts")
+        return ""
     css, seen = "", set()
     for slot in ("body", "head"):
         spec = TH["font_files"].get(slot)
         name = TH["font"] if slot == "body" else TH["heading_font"]
         if not spec or not name:
             continue
-        for weight, path in ((400, spec[0]), (700, spec[1])):
+        for weight, path in (((400, spec[0]), (700, spec[1])) if slot == "body" else ((700, spec[1]),)):
             key = (name, weight, path)
-            if key in seen or not os.path.isfile(path) or os.path.getsize(path) > 1_500_000:
+            if key in seen or not os.path.isfile(path):
                 continue
             seen.add(key)
-            with open(path, "rb") as f:
-                css += '@font-face{font-family:"%s";font-weight:%d;src:url(data:font/ttf;base64,%s) format("truetype")}\n' % (
-                    name, weight, base64.b64encode(f.read()).decode())
+            face = None
+            try:
+                face = TTFont(path, fontNumber=0)
+                options = subset.Options()
+                options.drop_tables += ["FFTM"]
+                sub = subset.Subsetter(options=options)
+                sub.populate(text=text)
+                sub.subset(face)
+                face.flavor = "woff2"
+                out = io.BytesIO()
+                face.save(out)
+                css += '@font-face{font-family:"%s";font-weight:%d;src:url(data:font/woff2;base64,%s) format("woff2")}\n' % (
+                    name, weight, base64.b64encode(out.getvalue()).decode())
+            except Exception as ex:
+                print("  note  could not subset font '%s' (%s); using system fonts" % (name, ex.__class__.__name__))
+            finally:
+                if face is not None:
+                    face.close()
     return css
 
 
@@ -3566,6 +3632,8 @@ def cmd_build(a):
     formats = build_formats(a)
     d = resolve_dir(a.dir)
     m = load_model(d)
+    if getattr(a, "embed_fonts", False):
+        TH["embed_fonts"] = m["theme"]["embed_fonts"] = True
     print("Building %s from %s" % (m["app"]["name"], os.path.relpath(m["source"])))
     ne, nw = report(validate(m), quiet_ok=True)
     if ne and not a.force:
@@ -3612,7 +3680,7 @@ def cmd_build(a):
 def cmd_set_status(a):
     set_status(resolve_dir(a.dir), a.story, a.status, a.verified)
     if not a.no_build:
-        return cmd_build(argparse.Namespace(dir=a.dir, force=False, strict=False, only=None, no_graphviz=False, profile="lean", formats=None, clean=False))
+        return cmd_build(argparse.Namespace(dir=a.dir, force=False, strict=False, only=None, no_graphviz=False, profile="lean", formats=None, clean=False, embed_fonts=False))
     return 0
 
 
@@ -3656,6 +3724,7 @@ def main(argv=None):
     b.add_argument("--clean", action="store_true", help="remove known stale outputs inside generated/")
     b.add_argument("--only", help="deprecated alias: docs,mermaid,diagrams,html,pdf")
     b.add_argument("--no-graphviz", action="store_true", help="use the built-in Pillow renderer even if Graphviz exists")
+    b.add_argument("--embed-fonts", action="store_true", help="embed WOFF2 subsets of theme fonts (needs fontTools and brotli)")
     v = sub.add_parser("validate", help="check the source for problems")
     v.add_argument("dir", nargs="?")
     v.add_argument("--strict", action="store_true", help="exit 1 on warnings too")

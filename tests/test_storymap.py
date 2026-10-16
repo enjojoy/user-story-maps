@@ -155,6 +155,21 @@ class TestTheme(Base):
         if sm.HAVE_PIL:
             sm.font(20)  # must not raise
 
+    def test_embed_fonts_is_a_boolean_and_heading_serif_fallback(self):
+        self.edit('text: "#1F2D26"', 'text: "#1F2D26"\n  heading_font: Georgia\n  embed_fonts: true')
+        m = sm.load_model(self.dir)
+        self.assertTrue(sm.TH["embed_fonts"])
+        self.assertIn('"Georgia",Georgia,"Times New Roman",serif', sm.heading_font_stack())
+        self.assertIn('BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif', sm.font_stack(""))
+        for value in ("yes", "1", 1, [], {}):
+            m["raw"]["theme"]["embed_fonts"] = value
+            with self.assertRaisesRegex(sm.SourceError, "theme.embed_fonts must be a bool"):
+                sm.apply_theme(m)
+        for value in (False, "false"):
+            m["raw"]["theme"]["embed_fonts"] = value
+            sm.apply_theme(m)
+            self.assertFalse(sm.TH["embed_fonts"])
+
     def test_theme_applies_to_generated_text(self):
         self.edit('primary: "#3A7D5B"', 'primary: "#C2185B"')
         sm.load_model(self.dir)
@@ -200,6 +215,8 @@ class TestBuild(Base):
         self.assertIn("## Architecture by topic", md)
         html = open(os.path.join(gen, "story-map.html"), encoding="utf-8").read()
         self.assertIn("All topics", html)
+        if sm.HAVE_PIL:
+            self.assertLess(os.path.getsize(os.path.join(gen, "story-map.html")), 2_000_000)
         csv_head = open(os.path.join(gen, "user-stories.csv"), encoding="utf-8").readline()
         self.assertIn("Topic", csv_head)
         for f in ("REPORT.md", "user-stories.md", "gaps-and-risks.md"):
@@ -272,6 +289,91 @@ class TestBuild(Base):
         self.assertIn("understand \\| everything", text)
         self.assertIn("Only \\| four", text)
         self.assertNotIn("four\nspecies", text)
+
+
+class TestHtml(Base):
+    def tearDown(self):
+        sm.apply_theme(sm.load_model(EXAMPLE))
+        super().tearDown()
+
+    def html(self, available=None):
+        gen = os.path.join(self.dir, "generated")
+        sm.gen_html(sm.load_model(self.dir), gen, available=available)
+        with open(os.path.join(gen, "story-map.html"), encoding="utf-8") as f:
+            return f.read()
+
+    @staticmethod
+    def images(page):
+        return json.loads(re.search(r", IMG=(.*?), OVL=", page).group(1))
+
+    def test_default_uses_system_fonts_and_expandable_story_details(self):
+        page = self.html()
+        self.assertNotIn("@font-face", page)
+        self.assertNotIn("data:font", page)
+        self.assertIn("BlinkMacSystemFont", page)
+        self.assertIn("class=\"story-details", page)
+        self.assertIn('colspan="5"', page)
+        self.assertIn("toggleStory", page)
+        self.assertIn("Where it lives", page)
+        self.assertIn("screenDetails", page)
+        self.assertIn("Outgoing actions", page)
+        self.assertIn("history.replaceState", page)
+        self.assertIn("lbStep(1,e)", page)
+        self.assertLess(len(page.encode("utf-8")), 2_000_000)
+
+    @unittest.skipUnless(sm.HAVE_PIL, "Pillow not installed")
+    def test_screen_previews_are_small_without_mutating_native_sources(self):
+        import base64, io
+        from PIL import Image
+        m = sm.load_model(self.dir)
+        original = {s["id"]: sm.load_img(m, s).size for s in m["screens"] if sm.load_img(m, s) is not None}
+        page = self.html()
+        imgs = self.images(page)
+        self.assertTrue(imgs)
+        for sid, uri in imgs.items():
+            with Image.open(io.BytesIO(base64.b64decode(uri.split(",", 1)[1]))) as image:
+                self.assertLessEqual(image.width, 480, sid)
+                self.assertLessEqual(image.height, 1040, sid)
+        for s in m["screens"]:
+            if s["id"] in original:
+                self.assertEqual(sm.load_img(m, s).size, original[s["id"]])
+
+    @unittest.skipUnless(sm.HAVE_PIL, "Pillow not installed")
+    def test_diagram_previews_and_relative_full_resolution_links(self):
+        import base64, io
+        from PIL import Image
+        gen = os.path.join(self.dir, "generated")
+        os.makedirs(gen)
+        for name in ("architecture.png", "overview.png"):
+            Image.new("RGB", (3000, 1200), "#6D9A7A").save(os.path.join(gen, name))
+        page = self.html()
+        imgs = self.images(page)
+        for key, limit in (("__arch", 2400), ("__overview", 1800)):
+            with Image.open(io.BytesIO(base64.b64decode(imgs[key].split(",", 1)[1]))) as image:
+                self.assertLessEqual(image.width, limit)
+        self.assertIn('"__arch": "architecture.png"', page)
+        self.assertIn('"__overview": "overview.png"', page)
+        self.assertIn("Open full resolution (", page)
+        self.assertIn('href="${esc(full)}"', page)
+        # A clean build must not embed stale diagrams that are scheduled for removal.
+        clean = self.html(available={"story-map.html"})
+        self.assertNotIn("__arch", self.images(clean))
+        self.assertNotIn("__overview", self.images(clean))
+        self.assertIn('"full": {}', clean)
+
+    def test_embed_fonts_cli_without_fonttools_falls_back_gracefully(self):
+        import contextlib, io
+        from unittest import mock
+        out = io.StringIO()
+        with mock.patch.dict(sys.modules, {"fontTools": None}), contextlib.redirect_stdout(out):
+            self.assertEqual(sm.main(["build", self.dir, "--formats", "html", "--embed-fonts"]), 0)
+        self.assertTrue(sm.TH["embed_fonts"])
+        with open(os.path.join(self.dir, "generated", "story-map.html"), encoding="utf-8") as f:
+            page = f.read()
+        self.assertIn("fontTools and brotli", out.getvalue())
+        self.assertIn("using system fonts", out.getvalue())
+        self.assertNotIn("@font-face", page)
+        self.assertNotIn("data:font", page)
 
 
 class TestBuildProfiles(unittest.TestCase):
@@ -644,7 +746,7 @@ class TestAspect(unittest.TestCase):
         self.assertIn("object-fit:contain", html_text)
         self.assertIn('"aspect": 1.6', html_text)
         self.assertIn('class="f"', html_text)
-        self.assertLess(os.path.getsize(os.path.join(g, "story-map.html")), 5 * 1024 * 1024)
+        self.assertLess(os.path.getsize(os.path.join(g, "story-map.html")), 2_000_000)
         if shutil.which("dot"):
             fl = self.Image.open(os.path.join(g, "flows", "f1.png"))
             boxes = sorted(b for b in red_frame_boxes(fl, 8) if b[2] - b[0] > 12)
@@ -847,7 +949,18 @@ class TestDevice(unittest.TestCase):
             with open(os.path.join(d, "generated", "story-map.html"), encoding="utf-8") as fh:
                 h = fh.read()
             self.assertEqual(len(set(re.findall(r'"ov": "([^"]+)"', h))), 1)    # six identical frames, one embedded overlay
-            self.assertLess(len(h), 5 * 1024 * 1024)
+            self.assertLess(len(h.encode("utf-8")), 2_000_000)
+            self.assertNotIn("@font-face", h)
+            import base64
+            imgs = TestHtml.images(h)
+            for uri in imgs.values():
+                if uri and uri.startswith("data:image"):
+                    with sm.Image.open(io.BytesIO(base64.b64decode(uri.split(",", 1)[1]))) as im:
+                        # Architecture is a separate preview; screen previews are at most 480 px.
+                        self.assertLessEqual(im.width, 2400)
+            for sid in ("p%d" % i for i in range(6)):
+                with sm.Image.open(io.BytesIO(base64.b64decode(imgs[sid].split(",", 1)[1]))) as im:
+                    self.assertLessEqual(im.width, 480)
 
 
 # --------------------------------------------------------------------------- tree layout of branching flows
