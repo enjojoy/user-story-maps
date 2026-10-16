@@ -1,0 +1,320 @@
+# Open Golf - story map source (open-source minigolf game, MIT). Real screenshots from the iOS simulator.
+# This is the ONE file you edit. Run `python3 scripts/storymap.py build examples/open-golf` to regenerate generated/.
+# Format: simple YAML. One value per line, 2-space indents, "- " starts a list item.
+
+app:
+  agents_check: off
+  name: Open Golf (iOS)
+  platform: ios
+  version: "master @ b9029f1"
+  checked: 2026-10-16
+  summary: An open-source 3D minigolf game in C - drag back to aim, release to putt, sink the ball in 20 hand-made holes.
+  disclaimer: "Unofficial illustration of the open-source Open Golf game by Michael Gerdes (MIT, github.com/mgerdes/Open-Golf); not affiliated with or endorsed by the author. Screenshots captured 2026-10-16 in the iOS simulator from commit b9029f1e80c3110ae3d4fc9300854bdaeef96508. Kenney Nature Kit models are CC0; see README."
+
+theme:                          # light map for a bright game: sky-blue page, the game's own button blue and aim-line green
+  primary: "#1EA7E1"            # the blue of the game's buttons and unlocked level tiles
+  background: "#E9F6FC"         # pale tint of the game's sky (#87CEEB)
+  text: "#1F2F44"
+  muted: "#5B6F8A"
+  surface: "#D4EBF7"
+  border: "#9CC3DD"
+  heading_font: "Fira Sans"     # the game's UI font (FiraSans-Bold.ttf, shipped in data/font)
+  google_font: true             # downloaded on demand and cached outside the repo
+  device:
+    style: auto
+    badge: label
+  status:                       # aim-line palette from data/config/game.cfg
+    built: "#2DBE4A"            # aim_green_color
+    partly: "#CC991A"           # aim_red_color
+    unverified: "#1EA7E1"       # button blue
+    missing: "#6486AF"          # menu panel slate blue
+  severity:
+    high: "#E6331A"             # aim_dark_red_color
+    medium: "#CC991A"
+    low: "#6486AF"
+
+topics:
+  - id: onboarding
+    title: First launch
+    description: The title screen with its single Play button.
+  - id: library
+    title: Levels and progress
+    description: The level grid with locks and best scores, and the courses behind it.
+  - id: journey
+    title: Playing a hole
+    description: Load a level, learn the controls, aim and putt, sink the ball, see the stroke count.
+  - id: settings
+    title: Pause and exit
+    description: The pause menu. The game has no settings screen, account or store.
+
+personas:
+  - id: newcomer
+    name: First-time player
+    as_a: first-time player
+    description: Just installed the game, has never aimed a putt here.
+  - id: casual
+    name: Casual player
+    as_a: casual player
+    description: Plays a few holes at a time to relax.
+  - id: completionist
+    name: Score chaser
+    as_a: score chaser
+    description: Replays holes to lower the stroke count.
+
+flows:
+  - id: first-run
+    topic: onboarding
+    title: "1 · Start"
+    description: Title screen to the level grid.
+    edges:
+      - "title -> level-select: Tap Play"
+  - id: levels
+    topic: library
+    title: "2 · Level grid"
+    description: Choosing a level, progress, and what later courses look like.
+    edges:
+      - "level-select -> loading: Tap level 1"
+      - "level-select -> level-select-progress: (Finish a level)"
+      - "level-select-progress -> level-2: Tap level 2"
+      - "level-select-progress -> level-10: (Tap a later open level)"
+  - id: play
+    topic: journey
+    title: "3 · Play a hole"
+    description: From loading a level to the success panel, with the two first-run hints.
+    edges:
+      - "loading -> level-intro: Level loads"
+      - "level-intro -> tutorial-aim: Banner fades out"
+      - "tutorial-aim -> aiming: Press the ball and drag back"
+      - "aiming -> watching-ball: Release to putt"
+      - "watching-ball -> tutorial-camera: (First shot only)"
+      - "watching-ball -> in-hole: Ball reaches the hole"
+      - "in-hole -> success: Celebration ends"
+  - id: pausing
+    topic: settings
+    title: "4 · Pause menu"
+    description: Pause during play, then resume, retry or leave.
+    edges:
+      - "watching-ball -> paused: Tap the pause button"
+
+screens:
+  - id: title
+    title: Title screen
+    flow: first-run
+    image: screens/title.png
+    notes: A fly-over of the courses behind the logo and one Play button.
+  - id: level-select
+    title: Level select (fresh install)
+    flow: levels
+    image: screens/level-select.png
+    notes: Only level 1 is open; the other 19 tiles show a padlock.
+  - id: level-select-progress
+    title: Level select (after level 1)
+    flow: levels
+    image: screens/level-select-progress.png
+    notes: Level 1 shows "Best 2" and level 2 is now open.
+  - id: level-2
+    title: Level 2 start
+    flow: levels
+    image: screens/level-2.png
+  - id: level-10
+    title: Level 10 start
+    flow: levels
+    image: screens/level-10.png
+    notes: Captured after seeding the local save so levels 1-9 were open; levels were not all played.
+  - id: loading
+    title: Loading a level
+    flow: play
+    image: screens/loading.png
+  - id: level-intro
+    title: Level banner
+    flow: play
+    image: screens/level-intro.png
+    notes: The text LEVEL 1 fades in over the course, then out.
+  - id: tutorial-aim
+    title: Hint - aim and set power
+    flow: play
+    image: screens/tutorial-aim.png
+    notes: Level 1, first launch. The dotted circle around the ball is the aim area.
+  - id: aiming
+    title: Aiming
+    flow: play
+    image: screens/aiming.png
+    notes: A green arrow grows with the drag; the arrow colour moves toward red as power rises.
+  - id: watching-ball
+    title: Ball rolling
+    flow: play
+    image: screens/watching-ball.png
+  - id: tutorial-camera
+    title: Hint - rotate the camera
+    flow: play
+    image: screens/tutorial-camera.png
+    notes: Shown after the first shot, on a fresh install only.
+  - id: in-hole
+    title: Ball drops into the hole
+    flow: play
+    image: screens/in-hole.png
+  - id: success
+    title: Success panel
+    flow: play
+    image: screens/success.png
+    notes: Shows the stroke count with Next, Retry and Exit.
+  - id: paused
+    title: Pause menu
+    flow: pausing
+    image: screens/paused.png
+    notes: Resume, Retry or Exit (Exit goes to the title screen).
+
+
+stories:
+  - id: US-01
+    persona: newcomer
+    want: to open the game and start playing with one tap
+    so_that: I do not have to set anything up
+    screens: [title]
+    status: built
+    verified: "simulator, 2026-10-16"
+    where: src/golf/ui.c (title screen)
+    notes: No account, login or settings step exists.
+  - id: US-02
+    persona: newcomer
+    want: to be told how to aim and set power
+    so_that: I can take my first shot without guessing
+    screens: [tutorial-aim]
+    status: built
+    verified: "simulator, fresh install, 2026-10-16"
+    where: src/golf/ui.c (tutorial 0)
+  - id: US-03
+    persona: newcomer
+    want: to learn that I can rotate the camera
+    so_that: I can see the hole from other angles
+    screens: [tutorial-camera]
+    status: built
+    verified: "simulator, fresh install, 2026-10-16"
+    where: src/golf/ui.c (tutorial 2)
+    notes: The release-to-hit hint appears on the aiming screen.
+  - id: US-04
+    persona: casual
+    want: to pick a level from a grid
+    so_that: I can go straight to the hole I want
+    screens: [level-select]
+    status: built
+    verified: "simulator, 2026-10-16"
+    where: src/golf/ui.c (level select scroll box)
+    notes: The grid scrolls; 20 tiles in rows of four.
+  - id: US-05
+    persona: completionist
+    want: to unlock the next level by finishing the current one
+    so_that: I move through the game in order
+    screens: [level-select, level-select-progress]
+    status: built
+    verified: "simulator, finished level 1, then level 2 opened, 2026-10-16"
+    where: src/golf/ui.c, storage key stroke_count_level_N
+  - id: US-06
+    persona: completionist
+    want: to see my best stroke count on each level
+    so_that: I know what to beat
+    screens: [level-select-progress]
+    status: built
+    verified: "simulator, 2026-10-16"
+    where: src/golf/game.c (stores the lowest count)
+    notes: Best scores live in a local file only.
+  - id: US-07
+    persona: casual
+    want: to see which level is loading and which one I am on
+    so_that: I know the game is working
+    screens: [loading, level-intro]
+    status: built
+    verified: "simulator, 2026-10-16"
+    where: src/golf/ui.c (loading level, level_num_text)
+  - id: US-08
+    persona: casual
+    want: to drag back from the ball and see the power before I let go
+    so_that: I can control the shot
+    screens: [aiming]
+    status: built
+    verified: "simulator, scripted drag, 2026-10-16"
+    where: src/golf/ui.c (aim circle)
+    notes: Touch input was injected by a local capture patch, not by a finger.
+  - id: US-09
+    persona: casual
+    want: to watch the ball roll and move the camera while it does
+    so_that: I can follow the shot
+    screens: [watching-ball]
+    status: built
+    verified: "simulator, 2026-10-16"
+    where: src/golf/ui.c (watching ball)
+  - id: US-10
+    persona: casual
+    want: to see the ball drop into the hole
+    so_that: the shot feels finished
+    screens: [in-hole]
+    status: built
+    verified: "simulator, 2026-10-16"
+    where: src/golf/game.c (celebration state)
+    notes: Captured mid-animation; the camera pulls in on the ball.
+  - id: US-11
+    persona: casual
+    want: to see my stroke count and choose Next, Retry or Exit
+    so_that: I can carry on or try for a better score
+    screens: [success]
+    status: built
+    verified: "simulator, 2 strokes then Next, 2026-10-16"
+    where: src/golf/ui.c (finished menu)
+    notes: Next is hidden on the last level.
+  - id: US-12
+    persona: casual
+    want: to pause, resume, retry or leave a hole
+    so_that: I can stop without losing my place
+    screens: [paused]
+    status: built
+    verified: "simulator, Resume and Exit used, 2026-10-16"
+    where: src/golf/ui.c (paused menu)
+    notes: Retry was not tapped.
+  - id: US-13
+    persona: casual
+    want: to play later courses with new obstacles
+    so_that: the game stays interesting
+    screens: [level-2, level-10]
+    status: partly
+    verified: "simulator, opened levels 2 and 10 only, 2026-10-16"
+    where: data/levels/level-N.level
+    notes: Level 10 was opened after seeding the save; the other 18 levels were not played.
+  - id: US-14
+    persona: casual
+    want: to mute sound or change settings
+    so_that: I can play quietly
+    status: missing
+    verified: "code search, 2026-10-16"
+    notes: No settings screen exists; audio has per-sound volume in code only.
+
+gaps:
+  - id: G-01
+    severity: high
+    title: Not launchable when rebuilt with the iOS 27 SDK
+    detail: The 2022 Sokol iOS code uses a plain UIApplicationDelegate with no UIScene lifecycle, so a build made with Xcode 27 exits at launch. The captures only worked after the binary's recorded SDK version was set to 18 on a local copy.
+    where: src/3rd_party/sokol/sokol_app.h (iOS)
+    stories: [US-01]
+  - id: G-02
+    severity: medium
+    title: No settings, sound control or reset
+    detail: There is no way to mute audio, change controls or clear saved progress from inside the game.
+    where: whole app
+    stories: [US-14]
+  - id: G-03
+    severity: low
+    title: Pause button overlaps the status bar
+    detail: On an iPhone with a Dynamic Island the pause button sits under the clock and battery icons, because the layout ignores safe areas.
+    where: Gameplay screens
+    stories: [US-12]
+  - id: G-04
+    severity: low
+    title: Scene is drawn at 1x resolution
+    detail: main.c sets high_dpi to false, so the 3D scene is rendered at 402 x 874 and upscaled on a 3x phone; edges look soft next to system text.
+    where: src/golf/main.c
+    stories: [US-08]
+  - id: G-05
+    severity: low
+    title: Level grid does not scroll back flush
+    detail: After scrolling to the bottom and back up, the first row of tiles stayed partly cut off until the game was relaunched.
+    where: Level select
+    stories: [US-04]
