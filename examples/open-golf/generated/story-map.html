@@ -9,7 +9,7 @@ header{background:#E9F6FC;border-bottom:1px solid var(--line);padding:14px 20px;
 h1{margin:0;font-size:20px}.sub{color:var(--mut);font-size:13px}
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
 .chip{border:2px solid;border-radius:999px;padding:2px 10px;font-size:13px;cursor:pointer;user-select:none;background:#E9F6FC}
-.chip.off{opacity:.35}.tabs button{border:0;background:none;font:inherit;color:inherit;padding:6px 12px;cursor:pointer;border-bottom:3px solid transparent}
+.chs{display:contents}.chip.off{opacity:.35}.tabs button{border:0;background:none;font:inherit;color:inherit;padding:6px 12px;cursor:pointer;border-bottom:3px solid transparent}
 .tabs button.on{border-color:#1EA7E1;font-weight:600}select,input{font:inherit;color:inherit;background:#E9F6FC;padding:4px 8px;border:1px solid var(--line);border-radius:6px}
 main{padding:20px}section.flow{margin-bottom:34px}section.flow h2{margin:0 0 4px}.desc{color:var(--mut);margin:0 0 10px}
 .row{display:flex;gap:18px;overflow-x:auto;padding-bottom:12px;align-items:flex-start}
@@ -37,7 +37,51 @@ th{background:#F0F3F4;position:sticky;top:105px}tr.hide{display:none}td.st{white
 #lbcontent{display:flex;gap:22px;align-items:center;max-width:92vw;max-height:84vh}#lb img#lbi{max-width:92vw;max-height:84vh;border-radius:8px}#lb #lbd .dv{height:76vh;width:auto;max-width:65vw;margin:0;cursor:default;filter:drop-shadow(0 10px 24px rgba(0,0,0,.6))}#lb .cap{color:#fefefe;margin-top:10px;text-align:center}#lb .cap a{color:inherit}
 #lbdetails{width:310px;max-height:78vh;overflow:auto;background:var(--bg);color:var(--ink);padding:16px;border-radius:8px}#lbdetails h2{margin:0 0 8px}#lbdetails p{overflow-wrap:anywhere}#lbdetails a{color:inherit}#lbdetails ul{padding-left:20px}
 #lb>button{position:absolute;top:50%;background:#fff3;color:#fefefe;border:0;font-size:34px;padding:8px 14px;cursor:pointer;border-radius:8px}#lb>button.close{top:10px;right:14px;font-size:24px}
-@media(max-width:720px){#lbcontent{flex-direction:column;overflow:auto;align-items:center}#lb #lbd .dv{height:50vh;max-width:85vw}#lbdetails{width:85vw;max-height:none;flex:none}#lb>button{padding:4px}}
+/* Phones and touch screens (mobile friendly viewer): tap targets >= 44px, no sideways page scroll, detail view as a full-screen page */
+@media(max-width:720px),(pointer:coarse){
+button,.chip,.mini,.story-row,.dv,a{touch-action:manipulation}
+.chip{display:inline-flex;align-items:center;min-height:44px;padding:0 14px}
+.tabs button{min-height:44px;padding:0 14px}
+select,input{min-height:44px;font-size:16px}
+.mini{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;font-size:13px;padding:0 8px}
+.chips{gap:6px}
+.out li{display:flex;align-items:center;flex-wrap:wrap;gap:0 4px}.out a{display:inline-flex;align-items:center;min-height:44px;padding:0 2px}
+.thumbs.small .dv{height:100px;margin:2px 6px 2px 0}
+#lbdetails li{margin-bottom:4px}#lbdetails a{display:inline-flex;align-items:center;min-height:44px}
+#lb .cap a{display:inline-flex;align-items:center;min-height:44px}
+}
+@media(max-width:720px){
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{font-size:16px}main{padding:14px 12px;overflow-wrap:anywhere}
+header{position:static;padding:12px 14px}h1{font-size:18px}.sub{font-size:12.5px}
+.bar{gap:6px}.chs{display:flex;flex:1 1 100%;gap:6px;overflow-x:auto;scrollbar-width:none}.chs::-webkit-scrollbar{display:none}.chip{flex:none}.bar select{flex:1 1 calc(50% - 6px);width:calc(50% - 3px);min-width:0}.bar input{flex:1 1 100%;min-width:0}
+.tabs{display:flex;overflow-x:auto;white-space:nowrap;margin:6px -14px 0;padding:0 8px;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}.tabs button{flex:none}
+.topic>h2.tb{font-size:18px;padding:8px 12px;border-left-width:6px}.topic>h2.tb small{display:block;margin:4px 0 0}.topic section.flow h2{font-size:17px}
+.row{margin:0 -12px;padding:0 12px 12px;gap:12px;scroll-snap-type:x proximity;scroll-padding:0 12px;-webkit-overflow-scrolling:touch}.card{scroll-snap-align:start}
+.card{width:min(250px,76vw)}.card.land{width:min(460px,88vw)}.card.sq{width:min(340px,82vw)}.card.tall{width:min(190px,66vw)}
+.out{font-size:14px}.bd{font-size:13px}
+.story-details .row{margin:12px 0 0;padding:0 0 12px}
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.arch>img,#main>img{max-width:100%;height:auto}
+table,tbody,thead{display:block}thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.stb tr.story-row:not(.hide){display:grid;grid-template-columns:auto 1fr auto;gap:6px 10px;align-items:center;background:#E9F6FC;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px}
+.stb tr.story-row[aria-expanded=true]{border-radius:10px 10px 0 0;border-bottom:0}
+.stb td{display:block;border:0;padding:0}.stb td:nth-child(1){grid-area:1/1}.stb td:nth-child(2){grid-area:1/2}.stb td:nth-child(5){grid-area:1/3}
+.stb td:nth-child(3){grid-area:2/1/3/4}.stb td:nth-child(4){grid-area:3/1/4/4}.stb .thumbs{white-space:normal;display:flex;flex-wrap:wrap}.stb .thumbs .dv{margin:0 6px 6px 0}
+.stb tr.story-details:not(.hidden){display:block;background:#E9F6FC;border:1px solid var(--line);border-top:0;border-radius:0 0 10px 10px}.stb tr.story-details td{display:block;padding:12px}
+.atb tbody tr{display:grid;grid-template-columns:repeat(5,1fr);gap:8px 6px;background:#E9F6FC;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.atb td{display:block;border:0;padding:0}.atb td:nth-child(1),.atb td:nth-child(2){grid-column:1/-1}.atb td[data-l]::before{content:attr(data-l);display:block;font-size:11px;font-weight:400;color:var(--mut)}
+.atb .thumbs{white-space:normal;display:flex;flex-wrap:wrap;margin-top:4px}.atb .thumbs .dv{margin:0 6px 6px 0}
+.grid{grid-template-columns:112px repeat(var(--n),minmax(132px,1fr))!important;gap:6px;width:max-content;min-width:100%}.grid>div{overflow-wrap:break-word}.grid>.h:first-child,.grid>.h.pn{position:sticky;left:0;z-index:2}
+#lb{justify-content:flex-start;align-items:stretch;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:rgba(0,0,0,.92)}
+#lbcontent{flex:none;flex-direction:column;align-items:center;gap:14px;width:100%;max-width:none;max-height:none;padding:64px 12px 16px;overflow-x:auto}
+#lb #lbd .dv{height:auto;width:min(56vw,240px);max-width:none;margin:0 auto}
+#lbdetails{width:100%;max-height:none;overflow:visible;flex:none}
+#lb img#lbi{max-width:none;max-height:none;width:200vw;align-self:flex-start}
+#lb .cap{margin:0;padding:0 16px 96px}
+#lb>button{position:fixed;top:auto;bottom:16px;width:52px;height:52px;padding:0;font-size:30px;line-height:1;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(30,30,30,.9);border:1px solid #fff5;z-index:2}
+#lb>button.close{top:10px;bottom:auto;right:10px;font-size:22px}
+}
 .hidden{display:none}
 .tpc{font-size:11px;font-weight:700;padding:2px 10px;letter-spacing:.03em}
 .tpill{border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600;white-space:nowrap;border:2px solid}
@@ -65,9 +109,9 @@ function sm(u){if(!S.st.has(u.status))return false;if(S.persona&&u.persona!==S.p
  if(S.q){const t=(u.id+' '+u.text+' '+u.where+' '+u.notes+' '+u.screens.map(x=>(D.screens[x]||{}).title).join(' ')).toLowerCase();if(!t.includes(S.q))return false}return true}
 function scm(s){const us=s.stories.map(i=>D.stories.find(u=>u.id===i));
  if(S.topic&&s.topic!==S.topic)return false;if(us.length)return us.some(sm);return S.st.has(s.status)&&!S.persona&&!S.q}
-function bar(){const b=document.getElementById('bar');b.innerHTML='';
+function bar(){const b=document.getElementById('bar');b.innerHTML='';const cs=$('<div class="chs"></div>');b.append(cs);
  for(const [k,v] of Object.entries(D.statuses)){const c=$(`<span class="chip ${S.st.has(k)?'':'off'}" style="border-color:${v.color};color:${v.color}">${v.label} (${D.counts[k]})</span>`);
-  c.onclick=()=>{S.st.has(k)?S.st.delete(k):S.st.add(k);render()};b.append(c)}
+  c.onclick=()=>{S.st.has(k)?S.st.delete(k):S.st.add(k);render()};cs.append(c)}
  const sel=$(`<select><option value="">All personas</option>${D.personas.map(p=>`<option value="${esc(p.id)}" ${S.persona===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select>`);
  sel.onchange=e=>{S.persona=e.target.value;render()};b.append(sel);
  const ts=$(`<select title="Filter by topic"><option value="">All topics</option>${D.topics.map(p=>`<option value="${esc(p.id)}" ${S.topic===p.id?'selected':''}>${esc(p.title)}</option>`).join('')}</select>`);
@@ -91,22 +135,22 @@ function card(id){const s=D.screens[id],c=col(s.status);
  return `<div class="card ${s.aspect>=1.15?'land ':s.aspect>=0.85?'sq ':s.aspect&&s.aspect<0.3?'tall ':''}${scm(s)?'':'dim'}" id="scr-${esc(id)}"><div class="tpc" style="background:${tc(s.topic)}22;color:${tc(s.topic)}">${esc(tt(s.topic))}</div><div class="ti">${esc(s.title)}</div><div class="id">${esc(id)}</div>${img}${badge(s.status)}<ul class="out">${out}</ul><div class="chips">${ch}</div></div>`}
 function vFlows(){return D.topics.filter(t=>!S.topic||S.topic===t.id).map(t=>{const fl=D.flows.filter(f=>f.topic===t.id);if(!fl.length)return '';
  return `<div class="topic"><h2 class="tb" style="border-color:${t.color};background:${t.color}1a;color:${t.color}">${esc(t.title)}<small>${esc(t.description)}</small></h2>${fl.map(f=>`<section class="flow"><h2>${esc(f.title)}</h2><p class="desc">${esc(f.description)}</p><div class="row">${f.screens.map(card).join('')||'<i>No screens</i>'}</div></section>`).join('')}</div>`}).join('')}
-function vArch(){const rows=D.topics.map(t=>`<tr><td><span class="tpill" style="border-color:${t.color};color:${t.color}">${esc(t.title)}</span><div class="sub">${esc(t.description)}</div></td><td>${t.nscreens}<div class="thumbs small">${Object.keys(D.screens).filter(id=>D.screens[id].topic===t.id&&IMG[id]).map(id=>dev(id)).join('')}</div></td><td>${t.nstories}</td>${Object.keys(D.statuses).map(k=>`<td style="color:${col(k)};font-weight:600">${t.counts[k]||0}</td>`).join('')}</tr>`).join('');
+function vArch(){const rows=D.topics.map(t=>`<tr><td><span class="tpill" style="border-color:${t.color};color:${t.color}">${esc(t.title)}</span><div class="sub">${esc(t.description)}</div></td><td data-l="Screens">${t.nscreens}<div class="thumbs small">${Object.keys(D.screens).filter(id=>D.screens[id].topic===t.id&&IMG[id]).map(id=>dev(id)).join('')}</div></td><td data-l="Stories">${t.nstories}</td>${Object.keys(D.statuses).map(k=>`<td data-l="${D.statuses[k].label}" style="color:${col(k)};font-weight:600">${t.counts[k]||0}</td>`).join('')}</tr>`).join('');
  const conns=D.connections.map(c=>`<li><span class="tpill" style="border-color:${tc(c.from)};color:${tc(c.from)}">${esc(tt(c.from))}</span> <span class="arrow">&rarr;</span> <span class="tpill" style="border-color:${tc(c.to)};color:${tc(c.to)}">${esc(tt(c.to))}</span> <span class="sub">${c.labels.map(esc).join(' &middot; ')}</span></li>`).join('');
  return `<div class="arch"><p class="desc">How the app is organised: topic areas and the places users cross from one to another.</p>${IMG['__arch']?`<img src="${IMG['__arch']}" onclick="lb('__arch')" alt="Architecture diagram">`:'<i>Architecture diagram not generated.</i>'}
- <h3>Topics</h3><table><thead><tr><th>Topic</th><th>Screens</th><th>Stories</th>${Object.keys(D.statuses).map(k=>`<th style="color:${col(k)}">${D.statuses[k].label}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>
+ <h3>Topics</h3><div class="tw"><table class="atb"><thead><tr><th>Topic</th><th>Screens</th><th>Stories</th>${Object.keys(D.statuses).map(k=>`<th style="color:${col(k)}">${D.statuses[k].label}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
  <h3>Connections between topics</h3><ul class="conn">${conns||'<li><i>No cross-topic navigation recorded.</i></li>'}</ul></div>`}
 function toggleStory(id){OPEN.has(id)?OPEN.delete(id):OPEN.add(id);const row=document.getElementById('st-'+id),details=document.getElementById('detail-'+id);row.setAttribute('aria-expanded',String(OPEN.has(id)));details.classList.toggle('hidden',!OPEN.has(id))}
 function storyKey(e,id){if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleStory(id)}}
 function vStories(){const rows=D.stories.map(u=>{const th=u.screens.map(s=>(D.screens[s]&&IMG[s])?dev(s):`<span class="mini" style="background:#8a8f98">${esc((D.screens[s]||{}).title||s)}</span>`).join('');
  const detail=[['Where it lives',u.where],['Verified',u.verified],['Notes',u.notes]].filter(([k,v])=>v).map(([k,v])=>`<p><b>${k}:</b> ${esc(v)}</p>`).join('');
  return `<tr id="st-${esc(u.id)}" class="story-row ${sm(u)?'':'hide'}" tabindex="0" aria-expanded="${OPEN.has(u.id)}" aria-controls="detail-${esc(u.id)}" onclick="toggleStory('${u.id}')" onkeydown="storyKey(event,'${u.id}')"><td>${esc(u.id)}</td><td><span class="tpill" style="border-color:${tc(u.topic)};color:${tc(u.topic)}">${esc(tt(u.topic))}</span></td><td>${esc(u.text)}</td><td class="thumbs small">${th}</td><td class="st"><span class="pill" style="background:${col(u.status)}">${D.statuses[u.status]?D.statuses[u.status].label:esc(u.status)}</span></td></tr><tr id="detail-${esc(u.id)}" class="story-details ${sm(u)&&OPEN.has(u.id)?'':'hidden'}"><td colspan="5">${detail||'<p>No evidence or notes recorded.</p>'}<div class="row">${u.screens.filter(id=>D.screens[id]).map(card).join('')}</div></td></tr>`}).join('');
- return `<table><thead><tr><th>ID</th><th>Topic</th><th>Story</th><th>Screens</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`}
+ return `<div class="tw"><table class="stb"><thead><tr><th>ID</th><th>Topic</th><th>Story</th><th>Screens</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`}
 function vMap(){const cols=D.flows.map(f=>({id:f.id,t:f.title,topic:f.topic}));if(D.stories.some(u=>!D.flows.find(f=>f.id===u.flow)))cols.push({id:'',t:'Unassigned'});
- let h=`<div class="grid" style="grid-template-columns:160px repeat(${cols.length},minmax(150px,1fr))"><div class="h"></div>${cols.map(c=>`<div class="h" style="border-top:5px solid ${tc(c.topic)}">${esc(c.t)}<div class="sub">${esc(tt(c.topic))}</div></div>`).join('')}`;
- for(const p of D.personas){h+=`<div class="h">${esc(p.name)}</div>`;for(const c of cols){
+ let h=`<div class="tw"><div class="grid" style="--n:${cols.length};grid-template-columns:160px repeat(${cols.length},minmax(150px,1fr))"><div class="h"></div>${cols.map(c=>`<div class="h" style="border-top:5px solid ${tc(c.topic)}">${esc(c.t)}<div class="sub">${esc(tt(c.topic))}</div></div>`).join('')}`;
+ for(const p of D.personas){h+=`<div class="h pn">${esc(p.name)}</div>`;for(const c of cols){
   h+='<div>'+D.stories.filter(u=>u.persona===p.id&&(D.flows.find(f=>f.id===u.flow)?u.flow:'')===c.id).map(u=>`<span class="mini" style="background:${col(u.status)};opacity:${sm(u)?1:.25}" title="${esc(u.text)}" onclick="goStory('${u.id}')">${esc(u.id)}</span>`).join('')+'</div>'}}
- return h+'</div>'}
+ return h+'</div></div>'}
 function vGaps(){return D.gaps.map(g=>`<div class="gap" style="border-color:${D.sev[g.severity]||'#999'}"><b>${esc(g.id)} &middot; ${esc(g.title)}</b> <span class="sub">(${esc(g.severity)})</span><div>${esc(g.detail)}</div>${g.where?`<div class="sub">Where: ${esc(g.where)}</div>`:''}${g.stories.length?`<div class="sub">Stories: ${g.stories.map(esc).join(', ')}</div>`:''}</div>`).join('')||'<i>No gaps recorded.</i>'}
 function vOver(){return (IMG['__overview']?`<img src="${IMG['__overview']}" style="max-width:100%;background:#E9F6FC;border:1px solid var(--line);cursor:zoom-in" onclick="lb('__overview')">`:'<i>Overview diagram not generated.</i>')}
 function render(){bar();if(location.hash!=='#'+S.tab)history.replaceState(null,'','#'+S.tab);const m=document.getElementById('main');m.innerHTML={arch:vArch,flows:vFlows,stories:vStories,map:vMap,gaps:vGaps,overview:vOver}[S.tab]()}
@@ -118,7 +162,7 @@ function screenDetails(s){const out=s.out.map(o=>`<li>${o.dashed?'(optional) ':'
  return `<h2>${esc(s.title)}</h2>${badge(s.status)}${s.where?`<p><b>Where it lives:</b> ${esc(s.where)}</p>`:''}${s.notes?`<p><b>Notes:</b> ${esc(s.notes)}</p>`:''}<h3>Outgoing actions</h3>${out?`<ul>${out}</ul>`:'<p>No outgoing actions recorded.</p>'}<h3>Stories</h3>${stories?`<ul>${stories}</ul>`:'<p>No stories linked.</p>'}`}
 function lb(id){if(!IMG[id])return;cur=id;const L=document.getElementById('lb'),screen=D.screens[id],details=document.getElementById('lbdetails');document.getElementById('lbi').style.display=screen?'none':'';document.getElementById('lbd').style.display=screen?'block':'none';details.style.display=screen?'block':'none';
  if(screen){document.getElementById('lbd').innerHTML=dev(id,false);details.innerHTML=screenDetails(screen)}else document.getElementById('lbi').src=IMG[id];
- const title=id==='__arch'?'Architecture by topic':screen?screen.title:'Flows overview',full=D.full[id];document.getElementById('lbc').innerHTML=esc(title)+(full?` &middot; <a href="${esc(full)}" target="_blank" rel="noopener">Open full resolution (${esc(full)})</a>`:'');L.style.display='flex'}
+ const title=id==='__arch'?'Architecture by topic':screen?screen.title:'Flows overview',full=D.full[id];document.getElementById('lbc').innerHTML=esc(title)+(full?` &middot; <a href="${esc(full)}" target="_blank" rel="noopener">Open full resolution (${esc(full)})</a>`:'');L.style.display='flex';L.scrollTop=0;document.getElementById('lbcontent').scrollLeft=0}
 function closeLb(){document.getElementById('lb').style.display='none'}
 function lbStep(d,e){if(e)e.stopPropagation();const k=keys();if(!k.includes(cur))return;lb(k[(k.indexOf(cur)+d+k.length)%k.length])}
 document.getElementById('lb').onclick=closeLb;
