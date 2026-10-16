@@ -386,8 +386,13 @@ class TestBuild(Base):
         for gap in m["gaps"]:
             self.assertEqual(len(re.findall(r"\*\*%s - " % re.escape(gap["id"]), text)), 1)
         self.assertIn("**%d stories:**" % len(m["stories"]), text)
+        summary = next(line for line in text.splitlines() if line.startswith("**%d stories:**" % len(m["stories"])))
+        expected_counts = " · ".join("%s %d %s" % (sm.STATUS[status]["emoji"], count, status)
+                                     for status, count in sm.counts(m["stories"]).items() if count)
+        self.assertEqual(summary, "**%d stories:** %s" % (len(m["stories"]), expected_counts))
         for status, count in sm.counts(m["stories"]).items():
-            self.assertIn("%s %d %s" % (sm.STATUS[status]["emoji"], count, status), text)
+            if count:
+                self.assertIn("%s %d %s" % (sm.STATUS[status]["emoji"], count, status), text)
         for target in re.findall(r"\]\(([^)]+)\)", text):
             self.assertFalse(os.path.isabs(target), target)
             self.assertTrue(os.path.exists(os.path.join(os.path.dirname(path), target)), target)
@@ -406,6 +411,56 @@ class TestBuild(Base):
         self.assertIn("understand \\| everything", text)
         self.assertIn("Only \\| four", text)
         self.assertNotIn("four\nspecies", text)
+
+    def test_report_prose_stays_readable_and_only_link_labels_escape_brackets(self):
+        m = sm.load_model(self.dir)
+        prose = 'Settings & "sharing" \'notes\' snake_case *start* [screen] `ready` | <now>\r\nnext'
+        escaped = 'Settings & "sharing" \'notes\' snake_case *start* [screen] `ready` \\| &lt;now> next'
+        m["topics"][0]["title"] = prose
+        m["S"]["welcome"]["title"] = prose
+        m["S"]["add-plant"]["title"] = prose
+        m["S"]["add-plant"]["image"] = ""
+        m["stories"][0]["notes"] = prose
+        m["stories"][0]["where"] = "src/screens/Welcome"
+        gen = os.path.join(self.dir, "generated")
+        sm.gen_report(m, gen, set())
+        with open(os.path.join(gen, "REPORT.md"), encoding="utf-8") as f:
+            text = f.read()
+        self.assertIn("### " + escaped + "\n", text)
+        self.assertIn("note: " + escaped, text)
+        label = escaped.replace("[", "\\[").replace("]", "\\]")
+        self.assertIn("[%s](../screens/welcome.png)" % label, text)
+        self.assertIn("| " + escaped + " |", text)
+        self.assertIn("where: `src/screens/Welcome`", text)
+        self.assertNotIn("&amp;", text)
+
+    def test_report_omits_zero_counts_and_keeps_comma_joined_flow_titles(self):
+        m = sm.load_model(self.dir)
+        for story in m["stories"]:
+            story["status"] = "built"
+        m["topics"].append(dict(id="empty", title="Empty topic", description=""))
+        m["flows"].append(dict(id="extra", topic=m["topics"][0]["id"], title='Second & "flow"'))
+        gen = os.path.join(self.dir, "generated")
+        sm.gen_report(m, gen, set())
+        with open(os.path.join(gen, "REPORT.md"), encoding="utf-8") as f:
+            text = f.read()
+        self.assertIn("**%d stories:** %s %d built\n" % (len(m["stories"]), sm.STATUS["built"]["emoji"],
+                                                        len(m["stories"])), text)
+        for status in sm.STATUS.values():
+            self.assertNotIn("%s 0" % status["emoji"], text)
+        self.assertIn("| Empty topic | 0 | 0 | - |  |", text)
+        topic_row = next(line for line in text.splitlines() if line.startswith("| Onboarding |"))
+        self.assertTrue(topic_row.endswith('| 1 · Getting started, Second & "flow" |'), topic_row)
+
+    def test_report_cross_topic_connections_are_a_tight_bullet_list(self):
+        m = sm.load_model(self.dir)
+        connections = sm.cross_topic_edges(m)
+        self.assertGreater(len(connections), 1)
+        gen = os.path.join(self.dir, "generated")
+        sm.gen_report(m, gen, set())
+        with open(os.path.join(gen, "REPORT.md"), encoding="utf-8") as f:
+            text = f.read()
+        self.assertRegex(text, r"\|\n\n(?:- [^\n]+\n){%d}\n## Stories\n" % len(connections))
 
 
 class TestHtml(Base):
@@ -437,6 +492,9 @@ class TestHtml(Base):
         self.assertIn("history.replaceState", page)
         self.assertIn("lbStep(1,e)", page)
         self.assertLess(len(page.encode("utf-8")), 2_000_000)
+
+    def test_story_id_column_does_not_wrap(self):
+        self.assertRegex(self.html(), r"\.story-row\s+td:first-child\s*\{[^}]*white-space\s*:\s*nowrap")
 
     @unittest.skipUnless(sm.HAVE_PIL, "Pillow not installed")
     def test_screen_previews_are_small_without_mutating_native_sources(self):
@@ -519,6 +577,10 @@ class TestBuildProfiles(unittest.TestCase):
         self.output = out.getvalue() + err.getvalue()
         return result
 
+    def opt_in_formats(self):
+        line = next(line for line in self.output.splitlines() if line.startswith("opt-in: "))
+        return line[len("opt-in: "):].split(" (", 1)[0].split(", ")
+
     @unittest.skipUnless(sm.HAVE_PIL, "Pillow not installed")
     def test_lean_default_writes_exactly_four_outputs(self):
         self.assertEqual(self.build(), 0, self.output)
@@ -527,6 +589,8 @@ class TestBuildProfiles(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.dir, ".gitignore")))
         self.assertIn("opt-in:", self.output)
         self.assertIn("--formats +name", self.output)
+        self.assertEqual(self.opt_in_formats(), ["csv", "mermaid", "dot", "flows", "flow-map", "overview",
+                                                 "pdf", "crops", "legacy-md"])
         self.assertRegex(self.output, r"REPORT\.md.*(?:KB|MB)")
         report = open(os.path.join(self.gen, "REPORT.md"), encoding="utf-8").read()
         for name in ("architecture.png", "one-pager.png", "story-map.html"):
@@ -543,15 +607,19 @@ class TestBuildProfiles(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.gen, "README.md")))
         self.assertFalse(os.path.exists(os.path.join(self.gen, "thumbs")))
         self.assertTrue(os.path.isfile(os.path.join(self.dir, ".cache", "thumbs", "s0.png")))
+        self.assertNotIn("opt-in:", self.output)
 
     @unittest.skipUnless(sm.HAVE_PIL, "Pillow not installed")
     def test_formats_add_and_remove_profile_outputs(self):
         self.assertEqual(self.build("--formats", "+csv,flows"), 0, self.output)
         self.assertEqual(set(os.listdir(self.gen)), {"REPORT.md", "architecture.png", "one-pager.png", "story-map.html",
                                                    "user-stories.csv", "flows"})
+        self.assertNotIn("csv", self.opt_in_formats())
+        self.assertNotIn("flows", self.opt_in_formats())
         shutil.rmtree(self.gen)
         self.assertEqual(self.build("--formats", "-onepager"), 0, self.output)
         self.assertEqual(set(os.listdir(self.gen)), {"REPORT.md", "architecture.png", "story-map.html"})
+        self.assertIn("onepager", self.opt_in_formats())
 
     def test_formats_replace_profile_and_mermaid_has_sources_only(self):
         self.assertEqual(self.build("--profile", "full", "--formats", "csv,mermaid"), 0, self.output)
@@ -559,6 +627,8 @@ class TestBuildProfiles(unittest.TestCase):
         sources = os.listdir(os.path.join(self.gen, "mermaid"))
         self.assertTrue(sources)
         self.assertTrue(all(name.endswith(".mmd") for name in sources), sources)
+        self.assertEqual(self.opt_in_formats(), ["html", "arch", "onepager", "report", "dot", "flows", "flow-map",
+                                                 "overview", "pdf", "crops", "legacy-md"])
 
     def test_unknown_format_lists_valid_names_before_building(self):
         self.assertEqual(self.build("--formats", "wat"), 2, self.output)
@@ -653,11 +723,21 @@ class TestBuildProfiles(unittest.TestCase):
 
     def test_report_code_keeps_literal_path_characters(self):
         code = sm.report_code("src/a&b/<Widget>|view")
-        self.assertIn("src/a&b/<Widget>\\|view", code)
+        self.assertEqual(code, "`src/a&b/<Widget>\\|view`")
         self.assertNotIn("&amp;", code)
         self.assertNotIn("&lt;", code)
-        self.assertTrue(code.startswith("`"))
-        self.assertTrue(code.endswith("`"))
+
+    def test_report_code_uses_padded_longer_fences_only_for_embedded_backticks(self):
+        self.assertEqual(sm.report_code("src/a_b.py"), "`src/a_b.py`")
+        self.assertEqual(sm.report_code("src/`Welcome`"), "`` src/`Welcome` ``")
+        self.assertEqual(sm.report_code("src/``Welcome``\nview"), "``` src/``Welcome`` view ```")
+
+    def test_report_text_preserves_prose_characters_and_leading_markers(self):
+        for marker in ("#", ">", "-"):
+            value = marker + ' & "quotes" \'single\' snake_case *star* [brackets] `code` \\path | <tag>\r\nnext'
+            expected = marker + ' & "quotes" \'single\' snake_case *star* [brackets] `code` \\path \\| &lt;tag> next'
+            with self.subTest(marker=marker):
+                self.assertEqual(sm.report_text(value), expected)
 
     def test_set_status_rebuild_uses_lean_defaults(self):
         if not sm.HAVE_PIL:

@@ -660,14 +660,15 @@ def legend_md():
 
 # --------------------------------------------------------------------------- markdown / csv
 def report_text(value):
-    """Literal prose in GitHub Markdown, including table cells."""
-    return html.escape(str(value), quote=False).replace("\\", "\\\\").replace("|", "\\|").replace("\r", " ").replace("\n", " ").replace("`", "\\`").replace("[", "\\[").replace("]", "\\]").replace("*", "\\*").replace("_", "\\_")
+    """Prose with only Markdown table and line-breaking characters escaped."""
+    return str(value).replace("<", "&lt;").replace("|", "\\|").replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
 
 
 def report_code(value):
-    value = str(value).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+    value = str(value).replace("|", "\\|").replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
     ticks = "`" * (max([len(t) for t in re.findall(r"`+", value)] or [0]) + 1)
-    return ticks + " " + value + " " + ticks
+    pad = " " if "`" in value else ""
+    return ticks + pad + value + pad + ticks
 
 
 def gen_report(m, gen, expected):
@@ -680,7 +681,7 @@ def gen_report(m, gen, expected):
         L += [text(m["app"]["summary"]), ""]
     if m["app"]["disclaimer"]:
         L += ["> " + text(m["app"]["disclaimer"]), ""]
-    L += ["**%d stories:** " % len(m["stories"]) + " · ".join("%s %d %s" % (STATUS[k]["emoji"], n, k) for k, n in counts(m["stories"]).items()),
+    L += ["**%d stories:** " % len(m["stories"]) + " · ".join("%s %d %s" % (STATUS[k]["emoji"], n, k) for k, n in counts(m["stories"]).items() if n),
           "Built = checked in code/running app (see Verified); unverified = not checked yet.", ""]
     links = []
     for path in ("architecture.png", "one-pager.png", "one-pager.pdf", "story-map.html", "flows/", "overview.png", "mermaid/"):
@@ -693,11 +694,14 @@ def gen_report(m, gen, expected):
     for r in topic_summary(m):
         L.append("| %s | %d | %d | %s | %s |" % (
             text(r["topic"]["title"]), len(r["screens"]), len(r["stories"]),
-            " · ".join("%s %d" % (STATUS[k]["emoji"], n) for k, n in r["counts"].items()),
+            " · ".join("%s %d" % (STATUS[k]["emoji"], n) for k, n in r["counts"].items() if n) or "-",
             text(", ".join(f["title"] for f in r["flows"]))))
-    for (a, b), edges in cross_topic_edges(m).items():
+    connections = cross_topic_edges(m)
+    if connections:
+        L.append("")
+    for (a, b), edges in connections.items():
         labels = list(collections.OrderedDict.fromkeys(e["label"] for e in edges if e["label"]))[:4]
-        L.append("\n- %s -> %s%s" % (text(topic_title(m, a)), text(topic_title(m, b)), ": " + text(", ".join(labels)) if labels else ""))
+        L.append("- %s -> %s%s" % (text(topic_title(m, a)), text(topic_title(m, b)), ": " + text(", ".join(labels)) if labels else ""))
     L += ["", "## Stories", ""]
     for tp, us in stories_by_topic(m):
         L += ["### " + text(tp["title"] if tp else "Unassigned"), ""]
@@ -709,8 +713,11 @@ def gen_report(m, gen, expected):
             for sid in u["screens"]:
                 s = m["S"].get(sid)
                 title = text(s["title"] if s else sid)
-                shots.append("[%s](../%s)" % (title, urllib.parse.quote(s["image"].replace("\\", "/"), safe="/"))
-                             if s and image_exists(m, s) else title)
+                if s and image_exists(m, s):
+                    label = title.replace("[", "\\[").replace("]", "\\]")
+                    shots.append("[%s](../%s)" % (label, urllib.parse.quote(s["image"].replace("\\", "/"), safe="/")))
+                else:
+                    shots.append(title)
             evidence = []
             for field, label in (("verified", "verified"), ("where", "where"), ("notes", "note")):
                 if u[field]:
@@ -2642,7 +2649,7 @@ main{padding:20px}section.flow{margin-bottom:34px}section.flow h2{margin:0 0 4px
 table{border-collapse:collapse;width:100%;background:#fff}th,td{border:1px solid var(--line);padding:7px 9px;vertical-align:top;text-align:left}
 th{background:#eef1f3;position:sticky;top:105px}tr.hide{display:none}td.st{white-space:nowrap}
 .thumbs{white-space:nowrap}.thumbs .dv{display:inline-block;height:96px;width:auto;margin:2px 4px;filter:drop-shadow(0 2px 3px rgba(10,12,20,.3))}
-.thumbs.small .dv{height:48px}.story-row{cursor:pointer}.story-row:hover{background:#f1f3f4}.story-details td{padding:14px}.story-details p{margin:0 0 8px}.story-details .row{margin-top:12px}
+.thumbs.small .dv{height:48px}.story-row{cursor:pointer}.story-row td:first-child{white-space:nowrap}.story-row:hover{background:#f1f3f4}.story-details td{padding:14px}.story-details p{margin:0 0 8px}.story-details .row{margin-top:12px}
 .pill{color:#fff;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600}
 .grid{display:grid;gap:10px;align-items:start}.grid>div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px;min-height:44px}
 .grid .h{background:#eef1f3;font-weight:700}.grid .mini{display:inline-block;margin:2px}
@@ -3724,7 +3731,9 @@ def cmd_build(a):
         if os.path.isfile(dest):
             size = os.path.getsize(dest)
             print("  %s (%s)" % (path, ("%.1f MB" % (size / 1048576)) if size >= 1048576 else ("%.1f KB" % (size / 1024))))
-    print("opt-in: %s (use --formats +name or --profile full)" % ", ".join(f for f in FORMATS if f not in LEAN_FORMATS))
+    opt_in = [f for f in FORMATS if f not in formats]
+    if opt_in:
+        print("opt-in: %s (use --formats +name or --profile full)" % ", ".join(opt_in))
     return 0
 
 
