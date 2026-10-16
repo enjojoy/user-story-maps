@@ -8,15 +8,6 @@ A skill for coding agents: it turns an app's screens and user stories into one s
 
 Most teams can't say quickly which screens their app has, which stories are really built, and where the gaps are. This skill makes your coding agent keep that picture up to date, so you can open one page and see it.
 
-## What you get
-
-- A picture of the app's structure: screens in phone frames, grouped into coloured lanes by topic, with arrows where users move from one area to another.
-- A clickable page with filters and search. Click a story or a screen for details.
-- A one-page overview: status, topics, the biggest gaps and every screen.
-- A short written report: every story once, with its evidence, and the gaps by severity.
-
-The map takes on the app's own colours and fonts, including dark mode. Each story is marked built, partly built, unverified or missing, and nothing counts as built until it has been checked.
-
 ## Examples
 
 ![Architecture by topic of the Wikipedia iOS example](examples/wikipedia-ios/generated/architecture.png)
