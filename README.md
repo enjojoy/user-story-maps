@@ -2,6 +2,7 @@
 
 Keep your app's topics, personas, flows, screens and user stories in one `stories.yaml`. One command turns it into a story map with real screenshots, topic swimlanes and the app's own look. It writes a `REPORT.md`, a clickable HTML viewer, an architecture-by-topic image and a one-pager. It uses free tools only (Python 3, optional Pillow), and nothing leaves your machine.
 
+## Examples
 ![Architecture by topic of the Wikipedia iOS example](examples/wikipedia-ios/generated/architecture.png)
 
 *[Wikipedia iOS](https://github.com/wikimedia/wikipedia-ios): unofficial illustration, not affiliated with the Wikimedia Foundation, MIT ([notices](THIRD-PARTY-NOTICES.md)).*
@@ -9,6 +10,11 @@ Keep your app's topics, personas, flows, screens and user stories in one `storie
 ![Architecture by topic of the Open-Golf iOS example](examples/open-golf/generated/architecture-preview.png)
 
 *[Open-Golf](https://github.com/mgerdes/Open-Golf): unofficial illustration, not affiliated with its author, MIT, art credits in [notices](THIRD-PARTY-NOTICES.md).*
+
+| Example | Contents |
+|---|---|
+| [`examples/wikipedia-ios/`](examples/wikipedia-ios/) | Wikipedia iOS app, dark theme |
+| [`examples/open-golf/`](examples/open-golf/) | Open-Golf game, light theme |
 
 ## Quick start
 ```bash
@@ -44,12 +50,6 @@ Add more with `--formats +name` or `--profile full`: `pdf`, `crops` (per-topic a
 - Story status is `built`, `partly`, `unverified` or `missing`. `built` requires `verified:` (how and when). The validator also warns about over-long and repeated text.
 
 Rules and options: [`looks.md`](skills/user-story-maps/references/looks.md), [`theme.md`](skills/user-story-maps/references/theme.md).
-
-## Examples
-| Example | Contents |
-|---|---|
-| [`examples/wikipedia-ios/`](examples/wikipedia-ios/) | Wikipedia iOS app, dark theme |
-| [`examples/open-golf/`](examples/open-golf/) | Open-Golf game, light theme |
 
 ## Layout
 ```
