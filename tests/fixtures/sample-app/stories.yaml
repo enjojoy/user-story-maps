@@ -1,18 +1,18 @@
-# Plant Waterer - story map source (FICTIONAL example app; all data is invented).
-# This is the ONE file you edit. Run `python3 storymap.py build` to regenerate everything in generated/.
+# Pocket Notes - fictional test fixture (all data is invented).
+# Test data only; generated output belongs in temporary test directories.
 # Format: simple YAML. One value per line, 2-space indents, "- " starts a list item.
 
 app:
   agents_check: off
-  name: Plant Waterer
+  name: Pocket Notes
   platform: ios                 # ios | android | web  (also picks the device frame)
   version: "demo build 1.0"     # the commit / build / release this map was checked against
   checked: 2026-10-15           # date you last verified statuses against code or a running app
-  summary: A fictional app that reminds people to water their houseplants.
+  summary: A fictional note-taking app with reminders, shared notebooks and a guest viewer.
 
 theme:                          # optional: the generated map follows the app's own palette
-  primary: "#3A7D5B"            # leaf green; status, severity and topic colours are derived from it
-  text: "#1F2D26"
+  primary: "#3568B0"            # blue; status, severity and topic colours are derived from it
+  text: "#223047"
   device:                       # device mockup around every screenshot (drawn by the generator, auto-detected from the image size)
     style: titanium             # black | titanium | light
     badge: label                # status shown as a dot + label under the device
@@ -20,51 +20,51 @@ theme:                          # optional: the generated map follows the app's 
 topics:                         # topic areas = how the app is architected; every flow belongs to one
   - id: onboarding
     title: Onboarding
-    description: First launch up to the first plant.
+    description: First launch up to the first note.
   - id: journey
     title: Main user journey
-    description: Seeing plants and watering them - the reason people open the app.
+    description: Seeing notes and saving them - the reason people open the app.
   - id: notifications
     title: Reminders
-    description: Custom topic - watering reminders and notification permission.
+    description: Custom topic - note reminders and notification permission.
   - id: settings
     title: Settings & sharing
-    description: Preferences and sharing the garden with a plant sitter.
+    description: Preferences and sharing the notebook with a guest viewer.
 
 personas:
-  - id: gardener
-    name: Busy gardener
-    as_a: busy gardener         # used in "As a ..." (defaults to the lower-cased name)
-    description: Owns 20+ plants and forgets which ones are thirsty.
+  - id: writer
+    name: Busy writer
+    as_a: busy writer         # used in "As a ..." (defaults to the lower-cased name)
+    description: Keeps 20+ notes and forgets which ones need attention.
   - id: beginner
-    name: Plant beginner
-    as_a: plant beginner
-    description: Just bought their first houseplant and is afraid of killing it.
-  - id: sitter
-    name: Plant sitter
-    as_a: friend who waters plants while the owner is away
-    description: A neighbour or friend who needs to know what to water this week.
+    name: Note beginner
+    as_a: note beginner
+    description: Just created their first note and wants help organizing it.
+  - id: guest
+    name: Guest viewer
+    as_a: friend who reviews shared notes while the owner is away
+    description: A neighbour or friend who needs to know what to review this week.
 
 flows:                          # a flow = one journey; edges say how you get from screen to screen
   - id: onboarding
     topic: onboarding
     title: "1 · Getting started"
-    description: First launch up to the first plant.
+    description: First launch up to the first note.
     edges:                      # "from_screen -> to_screen: what the user does"; "(...)" label = dashed/optional
-      - "welcome -> add-plant: Tap Add my first plant"
-      - "welcome -> plant-list: Tap Skip for now"
-  - id: plants
+      - "welcome -> add-note: Tap Add my first note"
+      - "welcome -> note-list: Tap Skip for now"
+  - id: notes
     topic: journey
-    title: "2 · Plants and watering"
-    description: Day-to-day use - see plants, water them, check history.
+    title: "2 · Notes and saving"
+    description: Day-to-day use - see notes, save them, check history.
     edges:
-      - "plant-list -> plant-detail: Tap a plant card"
-      - "plant-list -> add-plant: Tap +"
-      - "add-plant -> plant-list: Tap Save"
-      - "plant-detail -> watered: Tap Water now"
-      - "watered -> plant-list: Tap Done"
-      - "plant-detail -> water-history: Tap History"
-      - "plant-detail -> reminders: Tap Edit reminder"
+      - "note-list -> note-detail: Tap a note card"
+      - "note-list -> add-note: Tap +"
+      - "add-note -> note-list: Tap Save"
+      - "note-detail -> saved: Tap Save now"
+      - "saved -> note-list: Tap Done"
+      - "note-detail -> edit-history: Tap History"
+      - "note-detail -> reminders: Tap Edit reminder"
   - id: reminders
     topic: notifications
     title: "3 · Reminders"
@@ -72,42 +72,42 @@ flows:                          # a flow = one journey; edges say how you get fr
     edges:
       - "reminders -> notif-permission: Tap Turn on reminders"
       - "notif-permission -> push: (Time passes) reminder arrives"
-      - "push -> plant-detail: Tap the notification"
+      - "push -> note-detail: Tap the notification"
   - id: sharing
     topic: settings
     title: "4 · Settings and sharing"
-    description: App settings and handing the plants to a sitter.
+    description: App settings and sharing notes with a guest.
     edges:
-      - "plant-list -> settings: Tap Settings tab"
+      - "note-list -> settings: Tap Settings tab"
       - "settings -> reminders: Tap Default reminder time"
-      - "settings -> share-garden: Tap Share my garden"
-      - "share-garden -> sitter-view: Send invite"
+      - "settings -> share-notebook: Tap Share my notebook"
+      - "share-notebook -> guest-view: Send invite"
 
 screens:                        # every screen you want on the map; image = real screenshot path (relative to this folder)
   - id: welcome
     title: Welcome
     flow: onboarding
     image: screens/welcome.png
-  - id: add-plant
-    title: Add a plant
+  - id: add-note
+    title: Add a note
     flow: onboarding
-    image: screens/add-plant.png
-  - id: plant-list
-    title: My plants
-    flow: plants
-    image: screens/plant-list.png
-  - id: plant-detail
-    title: Plant detail
-    flow: plants
-    image: screens/plant-detail.png
-  - id: watered
-    title: Watered! (confirmation)
-    flow: plants
-    image: screens/watered.png
-  - id: water-history
-    title: Watering history
-    flow: plants
-    image: screens/water-history.png
+    image: screens/add-note.png
+  - id: note-list
+    title: My notes
+    flow: notes
+    image: screens/note-list.png
+  - id: note-detail
+    title: Note detail
+    flow: notes
+    image: screens/note-detail.png
+  - id: saved
+    title: Saved! (confirmation)
+    flow: notes
+    image: screens/saved.png
+  - id: edit-history
+    title: Edit history
+    flow: notes
+    image: screens/edit-history.png
     not_captured: Needs 30 days of demo data - seed it, then capture.
   - id: reminders
     title: Reminder schedule
@@ -126,12 +126,12 @@ screens:                        # every screen you want on the map; image = real
     title: Settings
     flow: sharing
     image: screens/settings.png
-  - id: share-garden
-    title: Share my garden
+  - id: share-notebook
+    title: Share my notebook
     flow: sharing
     not_captured: Not built yet - planned screen.
-  - id: sitter-view
-    title: Sitter checklist
+  - id: guest-view
+    title: Guest checklist
     flow: sharing
     not_captured: Not built yet - planned screen.
 
@@ -147,113 +147,113 @@ stories:
     where: src/screens/Welcome
   - id: US-02
     persona: beginner
-    want: to add my first plant by typing its name
-    so_that: I can start tracking it in under a minute
-    screens: [welcome, add-plant]
+    want: to add my first note by typing its name
+    so_that: I can start writing in under a minute
+    screens: [welcome, add-note]
     status: built
     verified: "code + app, 2026-10-15"
-    where: src/screens/AddPlant
+    where: src/screens/AddNote
   - id: US-03
     persona: beginner
-    want: to pick my plant from a list of common houseplants
-    so_that: I get a sensible watering schedule without guessing
-    screens: [add-plant]
+    want: to create my note from a list of common templates
+    so_that: I get a sensible layout without guessing
+    screens: [add-note]
     status: partly
-    where: src/data/species.json
-    notes: Only 4 species in the list so far.
+    where: src/data/templates.json
+    notes: Only 4 templates in the list so far.
   - id: US-04
-    persona: gardener
-    want: to see all my plants and which ones are thirsty today
-    so_that: I water the right ones first
-    screens: [plant-list]
+    persona: writer
+    want: to see all my notes and which ones need attention today
+    so_that: I review the right ones first
+    screens: [note-list]
     status: built
     verified: "app, 2026-10-15"
-    where: src/screens/PlantList
+    where: src/screens/NoteList
   - id: US-05
-    persona: gardener
-    want: to mark a plant as watered in one tap
-    so_that: logging never feels like a chore
-    screens: [plant-detail, watered]
+    persona: writer
+    want: to mark a note as saved in one tap
+    so_that: saving never feels like a chore
+    screens: [note-detail, saved]
     status: built
     verified: "code + tests, 2026-10-15"
-    where: src/screens/PlantDetail, tests/water.test
+    where: src/screens/NoteDetail, tests/save.test
     notes: No undo (see G-02).
   - id: US-06
-    persona: gardener
-    want: to see how often I watered a plant
-    so_that: I can spot over- or under-watering
-    screens: [plant-detail, water-history]
+    persona: writer
+    want: to see how often I edited a note
+    so_that: I can review how it changed over time
+    screens: [note-detail, edit-history]
     status: partly
     where: src/screens/History
     notes: Screen exists but shows a raw list, no chart.
   - id: US-07
-    persona: gardener
-    want: to set a custom reminder time for each plant
+    persona: writer
+    want: to set a custom reminder time for each note
     so_that: reminders fit my day
-    screens: [reminders, plant-detail]
+    screens: [reminders, note-detail]
     status: built
     verified: "app, 2026-10-15"
     where: src/screens/Reminders
   - id: US-08
     persona: beginner
-    want: to get a push reminder when a plant is thirsty
+    want: to get a push reminder when a note is due
     so_that: I do not have to remember anything
     screens: [notif-permission, push]
     status: unverified
     where: src/notifications
     notes: Push delivery not checked on a device after the last release.
   - id: US-09
-    persona: gardener
+    persona: writer
     want: to snooze a reminder for a day
-    so_that: I am not nagged when it rains
+    so_that: I am not nagged when I am busy
     screens: [push, reminders]
     status: missing
     notes: Snooze row on the Reminders screen is a disabled placeholder.
   - id: US-10
     persona: beginner
-    want: to see light and water tips for my plant
-    so_that: I give it the right care
-    screens: [plant-detail]
+    want: to see formatting and organization tips for my note
+    so_that: I keep it easy to read
+    screens: [note-detail]
     status: partly
-    where: src/screens/PlantDetail
-    notes: Light tip only; no watering-amount tip.
+    where: src/screens/NoteDetail
+    notes: Formatting tip only; no organization tip.
   - id: US-11
-    persona: gardener
-    want: to remove a plant I no longer own
+    persona: writer
+    want: to remove a note I no longer need
     so_that: my list stays relevant
-    screens: [plant-list]
+    screens: [note-list]
     status: partly
-    where: src/screens/PlantList
+    where: src/screens/NoteList
     notes: Swipe-to-delete works but asks for no confirmation.
   - id: US-12
-    persona: gardener
-    want: to change the default reminder time for all plants
+    persona: writer
+    want: to change the default reminder time for all notes
     so_that: I set it once
     screens: [settings, reminders]
     status: built
     verified: "app, 2026-10-15"
     where: src/screens/Settings
   - id: US-13
-    persona: gardener
-    want: to invite a plant sitter to my garden
-    so_that: my plants survive my holiday
-    screens: [settings, share-garden]
+    persona: writer
+    want: to invite a guest viewer to my notebook
+    so_that: my notes stay accessible during my holiday
+    screens: [settings, share-notebook]
     status: missing
   - id: US-14
-    persona: sitter
-    want: to see which plants to water this week
+    persona: guest
+    want: to see which notes to review this week
     so_that: I do not have to ask the owner
-    screens: [sitter-view]
+    screens: [guest-view]
     status: missing
   - id: US-15
-    persona: sitter
-    want: to tick plants off and notify the owner
+    persona: guest
+    want: to tick notes off and notify the owner
     so_that: the owner knows everything is fine
-    screens: [sitter-view, watered]
+    screens: [guest-view, saved]
     status: missing
   - id: US-16
-    persona: gardener
-    want: to export my plants and watering log
+    persona: writer
+    want: to export my notes and edit history
     so_that: my data is never locked in
     screens: [settings]
     status: unverified
@@ -269,17 +269,17 @@ gaps:
     stories: [US-08]
   - id: G-02
     severity: medium
-    title: No undo after Water now
-    detail: An accidental tap logs a watering and resets the schedule, with no way to reverse it.
-    where: src/screens/PlantDetail
+    title: No undo after Save now
+    detail: An accidental tap logs a save and resets the schedule, with no way to reverse it.
+    where: src/screens/NoteDetail
     stories: [US-05]
   - id: G-03
     severity: medium
-    title: Empty plant list after Skip for now has no guidance
+    title: Empty note list after Skip for now has no guidance
     detail: Users who skip onboarding land on a blank list with no hint to tap +.
     stories: [US-01, US-04]
   - id: G-04
     severity: low
-    title: Watering history not captured
+    title: Edit history not captured
     detail: The screen needs 30 days of demo data before it can be screenshotted.
     stories: [US-06]

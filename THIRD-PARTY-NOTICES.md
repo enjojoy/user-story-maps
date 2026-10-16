@@ -32,7 +32,7 @@ Device and product names (iPhone, Dynamic Island, Android, ...) are trademarks o
 
 ## Example content
 - `examples/wikipedia-ios/`: screenshots and names of the open-source **Wikipedia iOS app** (MIT, https://github.com/wikimedia/wikipedia-ios), captured in the iOS Simulator; article text and images shown on screen are Wikipedia/Wikimedia Commons content under CC BY-SA and the respective image licences. Unofficial illustration; not affiliated with or endorsed by the Wikimedia Foundation. Details in `examples/wikipedia-ios/README.md`.
-- `examples/plant-waterer/`: fictional app, screens drawn by `tools/make_mock_screens.py`; nothing third-party.
+- `tests/fixtures/sample-app/`: fictional app, solid-colour placeholder images drawn for tests; nothing third-party.
 
 ## Tooling used at run time (not bundled)
 Python standard library; optional Pillow (HPND licence), Graphviz (EPL), PyYAML (MIT), Playwright, mermaid-cli. They are installed by the user, not shipped here.

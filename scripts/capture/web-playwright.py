@@ -7,8 +7,8 @@
 
 capture.json is a list; one entry per screen (the id matches `id:` in stories.yaml):
     [ {"id": "welcome",    "path": "/"},
-      {"id": "plant-list", "path": "/plants", "wait_for": "[data-testid=plant-card]"},
-      {"id": "add-plant",  "path": "/plants/new", "click": "text=Add plant"} ]
+      {"id": "item-list", "path": "/items", "wait_for": "[data-testid=item-card]"},
+      {"id": "add-item",  "path": "/items/new", "click": "text=Add item"} ]
 Optional keys per entry: url (absolute URL instead of base-url + path), wait_for (CSS selector), click (selector
 clicked after load), full_page (bool), delay_ms, wait_until (load | domcontentloaded | networkidle).
 

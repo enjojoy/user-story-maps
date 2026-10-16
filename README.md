@@ -8,7 +8,6 @@ Keep your app's topics, personas, flows, screens and user stories in one `storie
 
 ## Quick start
 ```bash
-python3 scripts/storymap.py build examples/plant-waterer           # fictional quickstart
 python3 scripts/storymap.py build examples/wikipedia-ios           # real-app example (dark)
 python3 scripts/storymap.py init docs/story-map --agents           # your app: stories.yaml, screens/, .gitignore
 python3 scripts/storymap.py theme-from path/to/app/source          # optional: draft theme: from the app's tokens
@@ -45,7 +44,6 @@ Rules and options: [`looks.md`](skills/user-story-maps/references/looks.md), [`t
 | Example | Contents |
 |---|---|
 | [`examples/wikipedia-ios/`](examples/wikipedia-ios/) | Real app captured in the iOS simulator, dark theme: 7 topics, 27 screens, 27 stories (20 built, 1 partly, 6 unverified), 5 gaps |
-| [`examples/plant-waterer/`](examples/plant-waterer/) | Fictional quickstart with mock screens: 16 stories, 4 topics |
 
 ## Layout
 ```
@@ -53,8 +51,8 @@ skills/user-story-maps/SKILL.md    workflow, schema, rules (+ references/: outpu
 scripts/storymap.py                the generator (one file; stdlib + optional Pillow/PyYAML/Graphviz)
 scripts/capture/                   screenshot helpers: iOS Simulator, Android emulator, web (Playwright)
 templates/                         stories.yaml skeleton, AGENTS.md snippet, .gitignore snippet
-examples/                          wikipedia-ios, plant-waterer
-tests/                             python3 -m unittest discover -s tests
+examples/                          wikipedia-ios
+tests/                             python3 -m unittest discover -s tests; tiny fixture in fixtures/
 ```
 `init` does not copy `storymap.py` into your repo. `init --vendor` does.
 
