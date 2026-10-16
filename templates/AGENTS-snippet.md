@@ -22,5 +22,5 @@ Whenever you add, change, hide or remove a user-visible feature or screen, **bef
 5. If the app's look changes (brand colour, font), update the optional `theme:` block so the generated map keeps matching it. Screenshots are framed as devices automatically; override per screen with `device:` (never commit third-party frame images).
 6. Never hand-edit files in `generated/`; edit the source and rebuild.
 
-`<skill>` = the installed `user-story-maps` skill.
+`<skill>` = the folder of the `user-story-maps` skill (the folder that contains SKILL.md; in a clone of https://github.com/enjojoy/user-story-maps it is `skills/user-story-maps`). The generator is `<skill>/scripts/storymap.py`.
 <!-- user-story-maps:end -->

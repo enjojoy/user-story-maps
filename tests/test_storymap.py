@@ -826,6 +826,12 @@ class TestInit(unittest.TestCase):
         self.assertNotIn("vendored", self.output.lower())
         command = self.output.split("then run:  ", 1)[1].splitlines()[0]
         self.assertEqual(shlex.split(command), ["python3", os.path.abspath(sm.__file__), "build", self.dir])
+        with open(os.path.join(self.dir, "README.md"), encoding="utf-8") as f:
+            readme = f.read()
+        self.assertIn('SM="python3 <skill>/scripts/storymap.py"', readme)
+        self.assertIn("in a clone of the repo: skills/user-story-maps", readme)
+        with open(os.path.join(self.dir, "stories.yaml"), encoding="utf-8") as f:
+            self.assertIn("# After any change run `validate` and `build` (commands: see README.md in this folder).", f.read())
 
     def test_vendor_copies_generator_only_when_requested(self):
         self.assertEqual(self.run_main("init", self.dir, "--vendor"), 0)
@@ -997,6 +1003,9 @@ class TestInitAgents(AgentsRepoCase):
         self.assertNotIn("<skill>", text)
         self.assertNotIn("docs/story-map", text)
         self.assertTrue(os.path.isfile(os.path.join(self.dir, "storymap.py")))
+        readme = self.read("docs/maps/app/README.md").decode("utf-8")
+        self.assertIn('SM="python3 docs/maps/app/storymap.py"', readme)
+        self.assertNotIn("<skill>", readme)
 
     def test_quoted_vendor_paths_with_default_prefix_are_not_substituted_twice(self):
         import shlex
@@ -1010,6 +1019,10 @@ class TestInitAgents(AgentsRepoCase):
                           for command in ("validate", "build")])
         self.assertIn("`" + relative + "/stories.yaml`", text)
         self.assertNotIn("app map/app map", text)
+        readme = self.read(relative + "/README.md").decode("utf-8")
+        sm_line = next(line for line in readme.splitlines() if line.startswith("SM="))
+        self.assertEqual(sm_line, 'SM="python3 ' + shlex.quote(relative + "/storymap.py") + '"')
+        self.assertEqual(shlex.split(sm_line[4:-1]), ["python3", relative + "/storymap.py"])
 
     def test_crlf_file_preserves_surrounding_bytes_and_remains_idempotent(self):
         prefix, suffix = "# Before\r\n\r\n", "\r\n\r\n# After, without final newline"

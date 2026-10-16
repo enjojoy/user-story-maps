@@ -1,5 +1,5 @@
 # <App name> - story map source.  THE ONE FILE YOU EDIT.
-# After any change run:   python3 docs/story-map/storymap.py build
+# After any change run `validate` and `build` (commands: see README.md in this folder).
 # Format: simple YAML. One value per line, 2-space indents, "- " starts a list item, "#" starts a comment.
 # Quote a value with "double quotes" if it contains a colon followed by a space, or starts with [ { * & ! | >.
 
@@ -21,11 +21,11 @@ personas:                       # who the stories are for
 #   primary: "#2D7A5C"          #   brand colour; status / severity / topic colours are derived from it
 #   text: "#202124"             #   also: background, surface, border, secondary (all #RRGGBB)
 #   font: "Inter"               #   family name; proprietary fonts are only referenced, with a safe fallback
-#   google_font: true           #   true = download that family from Google Fonts if it is open-licensed
+#   google_font: false          #   off by default; true = download that family from Google Fonts (the only network request)
 #   # font_file: tools/Inter.ttf  # or point at a font file you are allowed to ship (relative path)
 #   # status:   { built: "#...", partly: "#...", unverified: "#...", missing: "#..." }
 #   # severity: { high: "#...", medium: "#...", low: "#..." }
-#   # Fill it from the app's code:  python3 docs/story-map/storymap.py theme-from path/to/app/source
+#   # Fill it from the app's code: run theme-from path/to/app/source with the script in README.md.
 #   device:                     #   device mockup around every screenshot (drawn with Pillow; auto-detected from the screenshot)
 #     style: auto               #   auto (black; titanium on a dark theme) | black | titanium | light
 #     # model: iphone-island    #   default model: iphone-island | iphone-notch | iphone-home-button | android-generic | tablet | browser-window | none
