@@ -2,13 +2,20 @@
 
 Keep your app's topics, personas, flows, screens and user stories in one `stories.yaml`. One command turns it into a story map with real screenshots, topic swimlanes and the app's own look. It writes a `REPORT.md`, a clickable HTML viewer, an architecture-by-topic image and a one-pager. It uses free tools only (Python 3, optional Pillow), and nothing leaves your machine.
 
+## Examples
+
 ![Architecture by topic of the Wikipedia iOS example](examples/wikipedia-ios/generated/architecture.png)
 
-*[Wikipedia iOS](https://github.com/wikimedia/wikipedia-ios) (dark theme), from [`examples/wikipedia-ios/stories.yaml`](examples/wikipedia-ios/stories.yaml): simulator screenshots in topic swimlanes, with thick arrows where users cross topics. Unofficial illustration of the open-source app (MIT), not affiliated with the Wikimedia Foundation. Captured 2026-10-15 from commit `ca8aaeb95639ca82105bcd5510277d8dde0e420e`. Trademarks and content belong to their owners (Wikipedia content CC BY-SA).*
+*[Wikipedia iOS](https://github.com/wikimedia/wikipedia-ios): unofficial illustration, not affiliated with the Wikimedia Foundation, MIT ([notices](THIRD-PARTY-NOTICES.md)).*
 
 ![Architecture by topic of the Open-Golf iOS example](examples/open-golf/generated/architecture-preview.png)
 
-*[Open-Golf](https://github.com/mgerdes/Open-Golf) (MIT, 3D minigolf game, light theme), from [`examples/open-golf/stories.yaml`](examples/open-golf/stories.yaml): simulator screenshots in topic swimlanes. Unofficial illustration of the open-source game, not affiliated with its author. Captured 2026-10-16 from upstream commit `b9029f1e80c3110ae3d4fc9300854bdaeef96508`. Art credits (Kenney Nature Kit, CC0; other assets not verified) are in [`examples/open-golf/README.md`](examples/open-golf/README.md) and [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).*
+*[Open-Golf](https://github.com/mgerdes/Open-Golf): unofficial illustration, not affiliated with its author, MIT, art credits in [notices](THIRD-PARTY-NOTICES.md).*
+
+| Example | Contents |
+|---|---|
+| [`examples/wikipedia-ios/`](examples/wikipedia-ios/) | Wikipedia iOS app, dark theme |
+| [`examples/open-golf/`](examples/open-golf/) | Open-Golf game, light theme |
 
 ## Quick start
 ```bash
@@ -44,12 +51,6 @@ Add more with `--formats +name` or `--profile full`: `pdf`, `crops` (per-topic a
 - Story status is `built`, `partly`, `unverified` or `missing`. `built` requires `verified:` (how and when). The validator also warns about over-long and repeated text.
 
 Rules and options: [`looks.md`](skills/user-story-maps/references/looks.md), [`theme.md`](skills/user-story-maps/references/theme.md).
-
-## Examples
-| Example | Contents |
-|---|---|
-| [`examples/wikipedia-ios/`](examples/wikipedia-ios/) | Real app captured in the iOS simulator, dark theme: 7 topics, 27 screens, 27 stories (20 built, 1 partly, 6 unverified), 5 gaps |
-| [`examples/open-golf/`](examples/open-golf/) | Open-source 3D minigolf game captured in the iOS simulator, light theme: 4 topics, 14 screens, 14 stories (12 built, 1 partly, 1 missing), 5 gaps |
 
 ## Layout
 ```
