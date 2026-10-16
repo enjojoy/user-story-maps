@@ -523,6 +523,8 @@ class TestBuildProfiles(unittest.TestCase):
     def test_lean_default_writes_exactly_four_outputs(self):
         self.assertEqual(self.build(), 0, self.output)
         self.assertEqual(set(os.listdir(self.gen)), {"REPORT.md", "architecture.png", "one-pager.png", "story-map.html"})
+        self.assertFalse(os.path.exists(os.path.join(self.dir, ".cache")))
+        self.assertFalse(os.path.exists(os.path.join(self.dir, ".gitignore")))
         self.assertIn("opt-in:", self.output)
         self.assertIn("--formats +name", self.output)
         self.assertRegex(self.output, r"REPORT\.md.*(?:KB|MB)")
@@ -539,6 +541,8 @@ class TestBuildProfiles(unittest.TestCase):
                     "flow-map.png", "flows", "architecture", "mermaid", "dot"}
         self.assertTrue(expected.issubset(set(os.listdir(self.gen))), set(os.listdir(self.gen)))
         self.assertFalse(os.path.exists(os.path.join(self.gen, "README.md")))
+        self.assertFalse(os.path.exists(os.path.join(self.gen, "thumbs")))
+        self.assertTrue(os.path.isfile(os.path.join(self.dir, ".cache", "thumbs", "s0.png")))
 
     @unittest.skipUnless(sm.HAVE_PIL, "Pillow not installed")
     def test_formats_add_and_remove_profile_outputs(self):
@@ -627,11 +631,25 @@ class TestBuildProfiles(unittest.TestCase):
         with open(stale) as f:
             self.assertEqual(f.read(), "keep until a successful build")
 
+    def test_graphviz_failure_does_not_clean_stale_outputs(self):
+        from unittest import mock
+        os.makedirs(self.gen)
+        stale = os.path.join(self.gen, "story-map.md")
+        with open(stale, "w") as f:
+            f.write("keep until Graphviz succeeds")
+        with mock.patch.object(sm, "gen_diagrams", return_value=["graphviz failed on architecture"]):
+            self.assertEqual(self.build("--formats", "arch", "--clean"), 1, self.output)
+        with open(stale) as f:
+            self.assertEqual(f.read(), "keep until Graphviz succeeds")
+
     def test_report_only_output_paths_do_not_request_graphviz_cache(self):
         from unittest import mock
         m = sm.load_model(self.dir)
         with mock.patch.object(sm, "HAVE_PIL", False), mock.patch.object(sm.shutil, "which", return_value="/usr/bin/dot"):
             self.assertEqual(sm.output_paths(m, {"report"}), {"REPORT.md"})
+            self.assertEqual(sm.output_paths(m, {"arch"}), {"architecture.png", "dot/architecture.dot"})
+            self.assertEqual(sm.output_paths(m, {"dot"}),
+                             {"dot/architecture.dot", "dot/overview.dot", "dot/flow-map.dot", "dot/f1.dot"})
 
     def test_report_code_keeps_literal_path_characters(self):
         code = sm.report_code("src/a&b/<Widget>|view")
@@ -648,6 +666,124 @@ class TestBuildProfiles(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(sm.main(["set-status", "US-1", "partly", "--dir", self.dir]), 0)
         self.assertEqual(set(os.listdir(self.gen)), {"REPORT.md", "architecture.png", "one-pager.png", "story-map.html"})
+
+    @unittest.skipUnless(sm.HAVE_PIL, "Pillow not installed")
+    def test_dot_only_uses_gitignored_cache_without_graphviz(self):
+        from unittest import mock
+        with mock.patch.object(sm.shutil, "which", return_value=None):
+            self.assertEqual(self.build("--formats", "dot"), 0, self.output)
+        self.assertEqual(set(os.listdir(self.gen)), {"dot"})
+        self.assertFalse(os.path.exists(os.path.join(self.gen, "thumbs")))
+        cached = os.path.join(self.dir, ".cache", "thumbs", "s0.png")
+        self.assertTrue(os.path.isfile(cached))
+        with open(os.path.join(self.dir, ".gitignore"), encoding="utf-8") as f:
+            self.assertEqual(f.read().splitlines(), [".cache/"])
+        for name in ("architecture", "overview", "flow-map", "f1"):
+            path = os.path.join(self.gen, "dot", name + ".dot")
+            with open(path, encoding="utf-8") as f:
+                sources = re.findall(r'SRC="([^"]+)"', f.read())
+            self.assertTrue(sources, name)
+            for source in sources:
+                self.assertFalse(os.path.isabs(source), source)
+                self.assertEqual(os.path.abspath(os.path.join(os.path.dirname(path), source)), cached)
+        self.assertEqual(self.build("--formats", "dot"), 0, self.output)
+        with open(os.path.join(self.dir, ".gitignore"), encoding="utf-8") as f:
+            self.assertEqual(f.read().splitlines().count(".cache/"), 1)
+
+    @unittest.skipUnless(sm.HAVE_PIL, "Pillow not installed")
+    def test_cache_appends_ignore_rule_without_replacing_existing_rules(self):
+        path = os.path.join(self.dir, ".gitignore")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("# Local rules\nkeep-me/")
+        m = sm.load_model(self.dir)
+        first = sm.make_thumbs(m, self.gen)
+        second = sm.make_thumbs(m, self.gen)
+        self.assertEqual(first, second)
+        with open(path, encoding="utf-8") as f:
+            self.assertEqual(f.read(), "# Local rules\nkeep-me/\n.cache/\n")
+        self.assertFalse(os.path.exists(os.path.join(self.gen, "thumbs")))
+
+    def test_make_thumbs_without_pillow_does_not_create_cache(self):
+        from unittest import mock
+        with mock.patch.object(sm, "HAVE_PIL", False):
+            self.assertEqual(sm.make_thumbs(sm.load_model(self.dir), self.gen), {})
+        self.assertFalse(os.path.exists(os.path.join(self.dir, ".cache")))
+        self.assertFalse(os.path.exists(os.path.join(self.dir, ".gitignore")))
+
+
+class TestInit(unittest.TestCase):
+    IGNORE_PATTERNS = {".cache/", "frames.json", "frames/", ".demo-session.json",
+                       "*.storage-state.json", ".env", ".env.*"}
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="storymap init ")
+        self.dir = os.path.join(self.tmp, "new map")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_main(self, *args):
+        import contextlib, io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            try:
+                result = sm.main(list(args))
+            except SystemExit as ex:
+                result = ex.code
+        self.output = out.getvalue()
+        return result
+
+    def test_default_init_has_gitignore_and_uses_external_script(self):
+        import shlex
+        self.assertEqual(self.run_main("init", self.dir), 0)
+        self.assertFalse(os.path.exists(os.path.join(self.dir, "storymap.py")))
+        self.assertTrue(os.path.isfile(os.path.join(self.dir, "stories.yaml")))
+        for name in ("screens", "generated"):
+            self.assertTrue(os.path.isfile(os.path.join(self.dir, name, ".gitkeep")))
+        self.assertEqual(os.listdir(os.path.join(self.dir, "generated")), [".gitkeep"])
+        with open(os.path.join(self.dir, ".gitignore"), encoding="utf-8") as f:
+            self.assertEqual(set(f.read().splitlines()), self.IGNORE_PATTERNS)
+        self.assertNotIn("vendored", self.output.lower())
+        command = self.output.split("then run:  ", 1)[1].splitlines()[0]
+        self.assertEqual(shlex.split(command), ["python3", os.path.abspath(sm.__file__), "build", self.dir])
+
+    def test_vendor_copies_generator_only_when_requested(self):
+        self.assertEqual(self.run_main("init", self.dir, "--vendor"), 0)
+        with open(os.path.join(self.dir, "storymap.py"), "rb") as f:
+            copied = f.read()
+        with open(sm.__file__, "rb") as f:
+            self.assertEqual(copied, f.read())
+        self.assertIn("vendored", self.output.lower())
+
+    def test_no_vendor_remains_a_hidden_no_op(self):
+        self.assertEqual(self.run_main("init", self.dir, "--no-vendor"), 0)
+        self.assertFalse(os.path.exists(os.path.join(self.dir, "storymap.py")))
+        other = os.path.join(self.tmp, "vendor map")
+        self.assertEqual(self.run_main("init", other, "--vendor", "--no-vendor"), 0)
+        self.assertTrue(os.path.isfile(os.path.join(other, "storymap.py")))
+        self.assertEqual(self.run_main("init", "--help"), 0)
+        self.assertIn("--vendor", self.output)
+        self.assertNotIn("--no-vendor", self.output)
+
+    def test_init_preserves_existing_ignore_rules_without_duplicates(self):
+        os.makedirs(self.dir)
+        path = os.path.join(self.dir, ".gitignore")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("# Existing rules\n.cache/\nprivate/")
+        self.assertEqual(self.run_main("init", self.dir), 0)
+        with open(path, encoding="utf-8") as f:
+            before = f.read()
+        self.assertTrue(before.startswith("# Existing rules\n.cache/\nprivate/\n"))
+        for pattern in self.IGNORE_PATTERNS:
+            self.assertEqual(before.splitlines().count(pattern), 1)
+        sm.ensure_gitignore(self.dir, tuple(sorted(self.IGNORE_PATTERNS)))
+        with open(path, encoding="utf-8") as f:
+            self.assertEqual(f.read(), before)
+
+    def test_version_is_1_2_0(self):
+        self.assertEqual(sm.__version__, "1.2.0")
+        self.assertEqual(self.run_main("--version"), 0)
+        self.assertEqual(self.output.strip(), "1.2.0")
 
 
 # --------------------------------------------------------------------------- screenshots keep their aspect ratio
@@ -793,7 +929,9 @@ class TestAspect(unittest.TestCase):
         os.makedirs(os.path.join(gen, "dot"), exist_ok=True)
         th = sm.make_thumbs(self.m, gen)
         for n, (w, h) in SHAPES.items():
-            im = self.Image.open(os.path.join(gen, "thumbs", n + ".png"))
+            cached = os.path.join(self.tmp, ".cache", "thumbs", n + ".png")
+            im = self.Image.open(cached)
+            self.assertEqual(os.path.abspath(os.path.join(gen, "dot", th[n][0])), cached)
             self.assertEqual(im.mode, "RGBA")
             self.assertTrue(th[n][3])                                              # marked as a framed image
             self.assertLessEqual(abs(im.width - 2 * th[n][1]), 1, n)
@@ -802,6 +940,7 @@ class TestAspect(unittest.TestCase):
             self.assertEqual(im.size, dv["size"])
             self._screen_checks(dict(img=im, rect=dv["rect"]), w, h, n)
             self.assertEqual(im.getpixel((0, 0))[3], 0, n)                        # transparent outside the device
+        self.assertFalse(os.path.exists(os.path.join(gen, "thumbs")))
 
     def _card_frame_checks(self, cards):
         for n, (w, h) in SHAPES.items():
@@ -1043,11 +1182,11 @@ class TestDevice(unittest.TestCase):
 
     def test_dot_nodes_use_the_framed_image(self):
         s = {"id": "a", "title": "A", "status": "built", "not_captured": ""}
-        node = sm.dot_node(s, ("thumbs/a.png", 200, 400, True))
-        self.assertIn('SRC="thumbs/a.png"', node)
+        node = sm.dot_node(s, ("../../.cache/thumbs/a.png", 200, 400, True))
+        self.assertIn('SRC="../../.cache/thumbs/a.png"', node)
         self.assertNotIn('BORDER="3"', node)              # no coloured border around the screenshot
         self.assertIn(sm.STATUS["built"]["color"], node)  # the status colour is on the badge dot
-        arch = sm.dot_arch_node(s, ("thumbs/a.png", 200, 400, True))
+        arch = sm.dot_arch_node(s, ("../../.cache/thumbs/a.png", 200, 400, True))
         self.assertIn("&#9679;", arch)
         self.assertNotIn('BORDER="3"', arch)
 

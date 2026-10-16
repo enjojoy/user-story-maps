@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
-"""storymap.py - one source file (stories.yaml) -> user stories, story map, diagrams, HTML, PDF.
+"""storymap.py - stories.yaml -> a lean report, HTML viewer, and native-resolution diagrams.
 
-Usage (run from anywhere; DIR defaults to the folder this script lives in, or docs/story-map):
+Usage (DIR defaults to this script's folder, docs/story-map, or the current folder):
+    python3 storymap.py build [DIR] [--profile lean|full] [--formats LIST] [--clean]
+    python3 storymap.py build [DIR] --formats +csv,flows   # add optional outputs
+    python3 storymap.py build [DIR] --formats -onepager   # remove a default output
+    python3 storymap.py validate [DIR] [--strict]         # warnings: long-field, repeated-text
+    python3 storymap.py status [DIR]
+    python3 storymap.py set-status US-03 built --dir DIR --verified "app, 2026-10-15"
+    python3 storymap.py init [DIR] [--vendor]             # copy the generator only with --vendor
 
-    python3 storymap.py build    [DIR]   # validate + regenerate everything in DIR/generated/
-    python3 storymap.py validate [DIR]   # only check the source (add --strict to fail on warnings)
-    python3 storymap.py status   [DIR]   # counts per status / flow / persona
-    python3 storymap.py set-status [DIR] US-03 built --verified "app, 2026-10-15"
-    python3 storymap.py init     [DIR]   # create DIR from the template (stories.yaml, screens/, generated/)
-
-Warnings include long-field and repeated-text; --strict fails on warnings too.
-
-Only the Python 3 standard library is required. Optional, with graceful fallback:
-  Pillow    -> thumbnails, PNG diagrams, PDF one-pager, HTML images   (steps are skipped without it)
-  PyYAML    -> full YAML support (otherwise a small built-in parser handles the documented subset)
-  Graphviz  -> nicer diagrams (otherwise a built-in Pillow renderer is used)
-  mmdc      -> render the Mermaid files to PNG/SVG (GitHub renders the .md without it)
-No network access, no paid services, nothing is uploaded anywhere.
+Lean defaults: generated/REPORT.md, architecture.png, one-pager.png, story-map.html.
+Full includes every optional format; --formats replaces a profile, or +name/-name modifies it.
+Only stdlib is required. Optional: Pillow (images/PDF/previews), PyYAML (full YAML),
+Graphviz (diagram fallback), fontTools+brotli (opt-in subset fonts). No uploads or external requests
+from the generated viewer. Thumbnails are cached in DIR/.cache/thumbs/ only when needed by DOT.
 """
-import argparse, base64, collections, csv, html, io, json, math, os, re, shutil, subprocess, sys, textwrap
+import argparse, base64, collections, csv, html, io, json, math, os, re, shlex, shutil, subprocess, sys, textwrap
 
 try:
     if os.environ.get("STORYMAP_NO_PIL"):  # test hook: pretend Pillow is not installed
@@ -31,7 +29,7 @@ except ImportError:  # the text outputs still work
 if HAVE_PIL:
     Image.MAX_IMAGE_PIXELS = None   # native-resolution maps are large on purpose (see "Resolution" in SKILL.md); we only open our own files
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # --------------------------------------------------------------------------- vocabulary
 STATUS = collections.OrderedDict([
@@ -1546,17 +1544,33 @@ def native_zoom(m, box, zmin=1.0):
     return round(z, 3)
 
 
+def ensure_gitignore(root, patterns=(".cache/",)):
+    """Append missing local-only patterns without replacing the caller's ignore rules."""
+    path = os.path.join(root, ".gitignore")
+    original = ""
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8") as f:
+            original = f.read()
+    lines = original.splitlines()
+    missing = [pattern for pattern in patterns if pattern not in lines]
+    if missing:
+        with open(path, "a", encoding="utf-8", newline="\n") as f:
+            if original and not original.endswith(("\n", "\r")):
+                f.write("\n")
+            f.write("\n".join(missing) + "\n")
+
+
 def make_thumbs(m, gen):
-    """Framed device images for diagrams -> {screen id: (path relative to generated/dot, w_pt, h_pt, framed)}.
-    The PNG is the node image Graphviz draws, so edges attach to the device outline. Written at 2x."""
+    """Framed DOT node images in DIR/.cache/thumbs/; paths are relative to generated/dot.
+    The transparent PNG is drawn at 2x; the cache is created only for DOT/Graphviz."""
     out = {}
-    tdir = os.path.join(gen, "thumbs")
-    if HAVE_PIL:
-        shutil.rmtree(tdir, ignore_errors=True)
+    tdir = os.path.join(m["root"], ".cache", "thumbs")
+    if HAVE_PIL and m["screens"]:
+        os.makedirs(tdir, exist_ok=True)
+        ensure_gitignore(m["root"])
     for s in m["screens"]:
         if HAVE_PIL:
             dv = screen_device(m, s, (LANDSCAPE_W, PORTRAIT_H), 2)
-            os.makedirs(tdir, exist_ok=True)
             tp = os.path.join(tdir, s["id"] + ".png")
             dv["img"].save(tp, optimize=True)
             out[s["id"]] = (os.path.relpath(tp, os.path.join(gen, "dot")).replace("\\", "/"), dv["size"][0] // 2, dv["size"][1] // 2, True)
@@ -3625,9 +3639,12 @@ def output_paths(m, formats, use_graphviz=True):
     if "mermaid" in formats:
         paths.update(("mermaid/architecture.mmd", "mermaid/topics.mmd", "mermaid/00-overview.mmd"))
         paths.update("mermaid/%02d-%s.mmd" % (i, f["id"]) for i, f in enumerate(m["flows"], 1))
-    if "dot" in formats or (not HAVE_PIL and use_graphviz and shutil.which("dot") and formats & {"arch", "flows", "overview", "flow-map"}):
-        paths.update("dot/" + name + ".dot" for name in ["architecture", "overview", "flow-map"] + [f["id"] for f in m["flows"]])
-        paths.update("thumbs/" + s["id"] + ".png" for s in m["screens"])
+    dot_formats = {"arch", "flows", "overview", "flow-map"} if "dot" in formats else (
+        formats & {"arch", "flows", "overview", "flow-map"} if not HAVE_PIL and use_graphviz and shutil.which("dot") else set())
+    names = [name for kind, name in (("arch", "architecture"), ("overview", "overview"), ("flow-map", "flow-map")) if kind in dot_formats]
+    if "flows" in dot_formats:
+        names += [f["id"] for f in m["flows"]]
+    paths.update("dot/" + name + ".dot" for name in names)
     return paths
 
 
@@ -3684,10 +3701,14 @@ def cmd_build(a):
         gen_mermaid(m, gen, render=False, sources="mermaid" in formats, legacy="legacy-md" in formats)
     diagrams = formats & {"arch", "crops", "flows", "flow-map", "overview", "dot"}
     if diagrams:
+        failed = False
         for note in gen_diagrams(m, gen, use_graphviz=not a.no_graphviz, formats=diagrams):
             print("  note  " + note)
+            failed = failed or note.startswith("graphviz failed on ")
             if note.startswith("flow-map.png skipped"):
                 expected.discard("flow-map.png")
+        if failed:
+            return 1
     if formats & {"onepager", "pdf"}:
         note = gen_onepager(m, gen, pdf="pdf" in formats)
         if note:
@@ -3727,16 +3748,18 @@ def cmd_init(a):
     for n in ("stories.yaml", "README.md"):
         shutil.copy(os.path.join(tdir, n), os.path.join(d, n))
     for sub in ("screens", "generated"):
-        open(os.path.join(d, sub, ".gitkeep"), "w").close()
-    if not a.no_vendor:
+        with open(os.path.join(d, sub, ".gitkeep"), "w"):
+            pass
+    ensure_gitignore(d, (".cache/", "frames.json", "frames/", ".demo-session.json", "*.storage-state.json", ".env", ".env.*"))
+    if getattr(a, "vendor", False):
         shutil.copy(os.path.abspath(__file__), os.path.join(d, "storymap.py"))
     print("Created %s" % d)
     print("  stories.yaml   <- the ONE file you edit")
     print("  screens/       <- put real screenshots here (see the capture guide in SKILL.md)")
     print("  generated/     <- written by the build; never edit")
-    if not a.no_vendor:
+    if getattr(a, "vendor", False):
         print("  storymap.py    <- vendored copy of the generator")
-    print("Next: edit stories.yaml, then run:  python3 %s build" % os.path.relpath(os.path.join(d, "storymap.py")))
+    print("Next: edit stories.yaml, then run:  python3 %s build %s" % (shlex.quote(os.path.abspath(__file__)), shlex.quote(d)))
     print("Also add the block from templates/AGENTS-snippet.md to the repo's AGENTS.md.")
     return 0
 
@@ -3745,7 +3768,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="storymap.py", description=__doc__.split("\n")[0])
     ap.add_argument("--version", action="version", version=__version__)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    b = sub.add_parser("build", help="validate, then regenerate everything in DIR/generated/")
+    b = sub.add_parser("build", help="validate, then generate the selected formats (default: lean)")
     b.add_argument("dir", nargs="?")
     b.add_argument("--force", action="store_true", help="build even if validation has errors")
     b.add_argument("--strict", action="store_true", help="refuse to build when there are warnings")
@@ -3772,7 +3795,8 @@ def main(argv=None):
     tf.add_argument("--limit", type=int, default=4000, help="max files to scan")
     i = sub.add_parser("init", help="create docs/story-map/ from the template")
     i.add_argument("dir", nargs="?")
-    i.add_argument("--no-vendor", action="store_true", help="do not copy storymap.py into the folder")
+    i.add_argument("--vendor", action="store_true", help="copy storymap.py into the new folder")
+    i.add_argument("--no-vendor", action="store_true", help=argparse.SUPPRESS)
     argv = list(sys.argv[1:] if argv is None else argv)
     for pos in range(len(argv) - 2, -1, -1):
         if argv[pos] == "--formats" and argv[pos + 1].startswith("-") and not argv[pos + 1].startswith("--"):
