@@ -27,7 +27,7 @@ Result: **no suitably licensed iPhone frame exists for redistribution in a publi
 Device and product names (iPhone, Dynamic Island, Android, ...) are trademarks of their owners and are used only descriptively; the drawn frames are generic and unaffiliated.
 
 ## Fonts
-- **Gelasio** (SIL Open Font License 1.1, https://fonts.google.com/specimen/Gelasio): used for headings in the Wikipedia example (a look-alike for the app's Georgia). It is downloaded on demand into `~/.cache/storymap/fonts` and is not committed as a file. Two weights are embedded as data URIs in `examples/wikipedia-ios/generated/story-map.html`, which the OFL allows. Proprietary fonts (Georgia, SF Pro, ...) are only referenced by name, never bundled.
+- **Gelasio** (SIL Open Font License 1.1, https://fonts.google.com/specimen/Gelasio): used for headings in the Wikipedia example (a look-alike for the app's Georgia). It is downloaded on demand into `~/.cache/storymap/fonts` and is not committed as a file. It only draws the PNGs; the HTML viewer uses system fonts and embeds no font by default (opt-in `embed_fonts` embeds a WOFF2 subset, which the OFL allows). Proprietary fonts (Georgia, SF Pro, ...) are only referenced by name, never bundled.
 - Any font you name in `theme:` with `google_font: true` is fetched only if its licence is open (OFL/Apache) and is cached outside the repository.
 
 ## Example content

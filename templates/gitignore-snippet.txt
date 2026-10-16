@@ -1,9 +1,9 @@
-# story map: never commit demo sessions or credentials
+# story map: build cache, demo sessions and credentials never committed (`init` writes the same into docs/story-map/.gitignore)
+docs/story-map/.cache/
 .demo-session.json
 *.storage-state.json
 .env
 .env.*
-docs/story-map/**/__pycache__/
-# story map: your own (separately licensed) device frames are never committed
+# your own (separately licensed) device frames are never committed
 docs/story-map/frames.json
 docs/story-map/frames/
