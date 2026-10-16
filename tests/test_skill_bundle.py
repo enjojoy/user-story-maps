@@ -12,7 +12,7 @@ SKILL = ROOT / "skills" / "user-story-maps"
 FIXTURE = ROOT / "tests" / "fixtures" / "sample-app"
 SYNC_COMMAND = (
     "mkdir -p skills/user-story-maps/scripts skills/user-story-maps/templates && "
-    "cp -R scripts/storymap.py scripts/capture skills/user-story-maps/scripts/ && "
+    "cp -R scripts/storymap.py scripts/check_viewer.py scripts/capture skills/user-story-maps/scripts/ && "
     "cp -R templates/. skills/user-story-maps/templates/"
 )
 

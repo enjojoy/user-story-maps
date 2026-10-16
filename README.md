@@ -23,6 +23,8 @@ Most teams can't say quickly which screens their app has, which stories are real
 - Wikipedia iOS, dark theme: [open the clickable map](https://enjojoy.github.io/user-story-maps/examples/wikipedia-ios/generated/story-map.html)
 <!-- pages-links:end -->
 
+The clickable maps work on phones too.
+
 Files for each example: [`examples/open-golf/`](examples/open-golf/) and [`examples/wikipedia-ios/`](examples/wikipedia-ios/).
 
 [![Architecture by topic of the Wikipedia iOS example (click for full size)](examples/wikipedia-ios/generated/architecture.png)](https://github.com/enjojoy/user-story-maps/raw/main/examples/wikipedia-ios/generated/architecture.png)

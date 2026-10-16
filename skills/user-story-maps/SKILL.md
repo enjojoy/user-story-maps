@@ -99,6 +99,14 @@ One value per line, 2-space indent, `- ` items, `#` comments, `[a, b]` lists; qu
 - Topics, standard set (list order = swimlane order): `onboarding`, `access`, `journey`, `library`, `settings`, `payments`, `support`.
 - Never retouch screenshots. Demo account only: no real names, emails, tokens, absolute paths, internal URLs. Third-party app → `app.disclaimer`.
 
+## Mobile friendly viewer
+
+`story-map.html` must work on a phone. After any change to the viewer (`storymap.py` HTML/CSS/JS):
+
+- Check it at 390 px wide: no horizontal page scroll, tap targets ≥ 44 px, screen detail view usable (full-screen, scrolls, close button reachable).
+- Never remove the viewport meta or block pinch-zoom (`user-scalable=no`). One self-contained file, no external requests.
+- Verify: `python3 <skill>/scripts/check_viewer.py docs/story-map/generated/story-map.html [--shots DIR]` (needs `pip install playwright && playwright install chromium`; checks 390 and 360 px, exit 1 on failure).
+
 ## Looks (all outputs)
 
 Details: [`references/looks.md`](references/looks.md), [`theme.md`](references/theme.md), own frame PNG [`frames.md`](references/frames.md).
@@ -126,12 +134,12 @@ Files: `docs/story-map/screens/<screen-id>.png`, one device size per app. More: 
 
 ```
 skills/user-story-maps/SKILL.md    workflow, schema, rules; references/: outputs, looks, theme, frames, capture-details
-scripts/                          editable source: generator + capture helpers (iOS, Android, web)
+scripts/                          editable source: generator, check_viewer.py (phone check), capture helpers (iOS, Android, web)
 templates/                        editable source: stories.yaml skeleton, README, AGENTS and .gitignore snippets
-skills/user-story-maps/scripts/   bundled copies of scripts/ (generator + capture helpers)
+skills/user-story-maps/scripts/   bundled copies of scripts/ (generator, check_viewer.py, capture helpers)
 skills/user-story-maps/templates/ bundled copies of templates/
 examples/                          wikipedia-ios (dark), open-golf (light)
-tests/                             tiny fixture in tests/fixtures/sample-app; test_skill_bundle.py checks copy sync and first run
+tests/                             tiny fixture in tests/fixtures/sample-app; test_skill_bundle.py checks copy sync and first run; test_mobile_viewer.py checks the phone viewer
 ```
 
 - Run tests: `python3 -m unittest discover -s tests`. Numpy-based checks are skipped when `numpy` is missing.
