@@ -28,10 +28,12 @@ Device and product names (iPhone, Dynamic Island, Android, ...) are trademarks o
 
 ## Fonts
 - **Gelasio** (SIL Open Font License 1.1, https://fonts.google.com/specimen/Gelasio): used for headings in the Wikipedia example (a look-alike for the app's Georgia). It is downloaded on demand into `~/.cache/storymap/fonts` and is not committed as a file. It only draws the PNGs; the HTML viewer uses system fonts and embeds no font by default (opt-in `embed_fonts` embeds a WOFF2 subset, which the OFL allows). Proprietary fonts (Georgia, SF Pro, ...) are only referenced by name, never bundled.
+- **Fira Sans** (SIL Open Font License 1.1, https://fonts.google.com/specimen/Fira+Sans): used for headings in the Open Golf example (the game's own UI font). Downloaded on demand into `~/.cache/storymap/fonts`, never committed; the OFL permits redistribution of the rendered images.
 - Any font you name in `theme:` with `google_font: true` is fetched only if its licence is open (OFL/Apache) and is cached outside the repository.
 
 ## Example content
 - `examples/wikipedia-ios/`: screenshots and names of the open-source **Wikipedia iOS app** (MIT, https://github.com/wikimedia/wikipedia-ios), captured in the iOS Simulator; article text and images shown on screen are Wikipedia/Wikimedia Commons content under CC BY-SA and the respective image licences. Unofficial illustration; not affiliated with or endorsed by the Wikimedia Foundation. Details in `examples/wikipedia-ios/README.md`.
+- `examples/open-golf/`: screenshots and names of the open-source **Open Golf** game (MIT, copyright (c) 2020 Michael Gerdes, https://github.com/mgerdes/Open-Golf, commit b9029f1), captured in the iOS Simulator; the screens are screenshots of MIT-licensed software. Art, as verified in the upstream repo (2026-10-16): Kenney Nature Kit 2.1 models (trees, rocks, plants) are CC0 (`data/models/nature_kit/License.txt`) and `flag_red.obj` carries a "Created by Kenney" header; the README lists "Kenney Art Assets" without naming packs. The repo has no licence file for its sounds, UI icons, fonts (Fira Sans, Castle Rock, Font Awesome) or pixel-pack textures, so no licence is claimed for them; the screenshots show the logo font, Fira Sans text and the icons. Unofficial illustration; not affiliated with the author. Details in `examples/open-golf/README.md`.
 - `tests/fixtures/sample-app/`: fictional app, solid-colour placeholder images drawn for tests; nothing third-party.
 
 ## Tooling used at run time (not bundled)

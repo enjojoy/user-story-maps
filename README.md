@@ -44,6 +44,7 @@ Rules and options: [`looks.md`](skills/user-story-maps/references/looks.md), [`t
 | Example | Contents |
 |---|---|
 | [`examples/wikipedia-ios/`](examples/wikipedia-ios/) | Real app captured in the iOS simulator, dark theme: 7 topics, 27 screens, 27 stories (20 built, 1 partly, 6 unverified), 5 gaps |
+| [`examples/open-golf/`](examples/open-golf/) | Open-source 3D minigolf game captured in the iOS simulator, light theme: 4 topics, 14 screens, 14 stories (12 built, 1 partly, 1 missing), 5 gaps |
 
 ## Layout
 ```
@@ -51,7 +52,7 @@ skills/user-story-maps/SKILL.md    workflow, schema, rules (+ references/: outpu
 scripts/storymap.py                the generator (one file; stdlib + optional Pillow/PyYAML/Graphviz)
 scripts/capture/                   screenshot helpers: iOS Simulator, Android emulator, web (Playwright)
 templates/                         stories.yaml skeleton, AGENTS.md snippet, .gitignore snippet
-examples/                          wikipedia-ios
+examples/                          wikipedia-ios, open-golf
 tests/                             python3 -m unittest discover -s tests; tiny fixture in fixtures/
 ```
 `init` does not copy `storymap.py` into your repo. `init --vendor` does.
