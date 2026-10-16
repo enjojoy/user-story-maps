@@ -15,3 +15,6 @@ frames/
 *.otf
 *.woff
 *.woff2
+
+# bundled example fonts (open-licensed, with OFL.txt)
+!examples/*/fonts/*.ttf

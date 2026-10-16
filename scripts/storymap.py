@@ -13,8 +13,10 @@ Usage (DIR defaults to this script's folder, docs/story-map, or the current fold
 Lean defaults: generated/REPORT.md, architecture.png, one-pager.png, story-map.html.
 Full includes every optional format; --formats replaces a profile, or +name/-name modifies it.
 Only stdlib is required. Optional: Pillow (images/PDF/previews), PyYAML (full YAML),
-Graphviz (diagram fallback), fontTools+brotli (opt-in subset fonts). No uploads or external requests
-from the generated viewer. Thumbnails are cached in DIR/.cache/thumbs/ only when needed by DOT.
+Graphviz (diagram fallback), fontTools+brotli (opt-in subset fonts). Nothing is uploaded; the generated
+viewer makes no requests. The only network request the tool can make is the optional Google Fonts
+download when theme.google_font is true (off by default).
+Thumbnails are cached in DIR/.cache/thumbs/ only when needed by DOT.
 """
 import argparse, base64, collections, csv, html, io, json, math, os, re, shlex, shutil, subprocess, sys, textwrap
 
@@ -3198,6 +3200,8 @@ def _slug(f):
     return re.sub(r"[^a-z0-9]+", "-", f.lower()).strip("-")
 
 
+# Nothing is uploaded; the viewer makes no requests. This optional Google Fonts download
+# is the tool's only network request, enabled by theme.google_font (off by default).
 def _google_fetch(family):
     """Download an open-licensed Google Font (regular + bold TTF) into a cache OUTSIDE the repo."""
     if os.environ.get("STORYMAP_NO_NETWORK"):
@@ -3537,7 +3541,7 @@ def theme_from(path, limit=4000):
     print("  # text: \"#RRGGBB\"; background: \"#FFFFFF\" (light always); surface: ...; border: ...")
     top_font = fonts.most_common(1)[0][0] if fonts else ""
     print("  font: %s" % (json.dumps(top_font) if top_font else "\"\"          # family name; if it is proprietary just name it (fallback is used)"))
-    print("  google_font: false          # true = fetch `font` from Google Fonts if it is an open-licensed family")
+    print("  google_font: false          # off by default; true = download that family from Google Fonts (the only network request)")
     print("  # status:   { built: \"#...\", partly: \"#...\", unverified: \"#...\", missing: \"#...\" }   # default: derived from primary")
     print("  # severity: { high: \"#...\", medium: \"#...\", low: \"#...\" }")
     return 0
@@ -3855,6 +3859,9 @@ def cmd_init(a):
     given_dir = a.dir or os.path.join("docs", "story-map")
     d = os.path.abspath(given_dir)
     root = repo_root(d)
+    rel_dir = os.path.relpath(d, root).replace(os.sep, "/")
+    if rel_dir == ".." or rel_dir.startswith("../"):
+        rel_dir = given_dir.replace(os.sep, "/")
     agents = getattr(a, "agents", None)
     here = os.path.dirname(os.path.abspath(__file__))
     tdir = next((p for p in (os.path.join(here, "..", "templates"), os.path.join(here, "templates")) if os.path.isdir(p)), None)
@@ -3874,6 +3881,15 @@ def cmd_init(a):
         ensure_gitignore(d, (".cache/", "frames.json", "frames/", ".demo-session.json", "*.storage-state.json", ".env", ".env.*"))
     if getattr(a, "vendor", False):
         shutil.copy(os.path.abspath(__file__), os.path.join(d, "storymap.py"))
+        if not existing:
+            readme_path = os.path.join(d, "README.md")
+            with open(readme_path, encoding="utf-8") as f:
+                readme = f.read()
+            command = "python3 " + shlex.quote(rel_dir.rstrip("/") + "/storymap.py")
+            readme = "\n".join('SM="%s"' % command if line.startswith('SM="python3 <skill>/scripts/storymap.py"') else line
+                               for line in readme.splitlines()) + "\n"
+            with open(readme_path, "w", encoding="utf-8") as f:
+                f.write(readme)
     print("%s %s" % ("Using existing" if existing else "Created", d))
     print("  stories.yaml   <- the ONE file you edit")
     print("  screens/       <- put real screenshots here (see the capture guide in SKILL.md)")
@@ -3882,9 +3898,6 @@ def cmd_init(a):
         print("  storymap.py    <- vendored copy of the generator")
     print("Next: edit stories.yaml, then run:  python3 %s build %s" % (shlex.quote(os.path.abspath(__file__)), shlex.quote(d)))
     if agents is not None:
-        rel_dir = os.path.relpath(d, root).replace(os.sep, "/")
-        if rel_dir == ".." or rel_dir.startswith("../"):
-            rel_dir = given_dir.replace(os.sep, "/")
         apply_agents(root, agents, agents_snippet(tdir, rel_dir, getattr(a, "vendor", False)), rel_dir)
     else:
         print("\nIMPORTANT: agents only keep the map current if the repo tells them to.")

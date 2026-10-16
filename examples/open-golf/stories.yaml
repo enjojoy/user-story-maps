@@ -19,7 +19,9 @@ theme:                          # light map for a bright game: sky-blue page, th
   surface: "#D4EBF7"
   border: "#9CC3DD"
   heading_font: "Fira Sans"     # the game's UI font (FiraSans-Bold.ttf, shipped in data/font)
-  google_font: true             # downloaded on demand and cached outside the repo
+  google_font: false            # no network: the heading font ships in fonts/ (SIL OFL, see fonts/OFL.txt)
+  heading_font_file: fonts/FiraSans-Regular.ttf
+  heading_font_file_bold: fonts/FiraSans-Bold.ttf
   device:
     style: auto
     badge: label

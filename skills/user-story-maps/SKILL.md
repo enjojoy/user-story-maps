@@ -13,6 +13,8 @@ Use: app docs, "what is built" audit, gap planning, after any user-visible chang
 
 **Do this first:** run `init docs/story-map --agents`. It adds a block to the repo's `AGENTS.md` (or `CLAUDE.md`) that tells coding agents to keep the map updated; without it they will not. No such file yet? Use `--agents AGENTS.md` to create one. `validate` warns when none mentions the map.
 
+`<skill>` = the folder containing this `SKILL.md`. Run the bundled generator with `python3 <skill>/scripts/storymap.py`; a skill-only install works. In a clone of the repo, it is `skills/user-story-maps/scripts/storymap.py`.
+
 The `--agents` block sits between markers, so running `init --agents` again updates it and never overwrites the rest of the file.
 
 ## Workflow
@@ -43,7 +45,7 @@ After edits: `validate && build`. Append new items with unique ids; screens need
 | `theme-from APP_SOURCE [--limit N]` | Read-only scan of colours/fonts → draft `theme:` |
 
 - `init` does not copy `storymap.py` into the app repo; `init --vendor` does (then run `./storymap.py`).
-- Try the bundled examples: `python3 scripts/storymap.py build examples/wikipedia-ios` (dark) or `build examples/open-golf` (light).
+- From a clone of the repo, try the bundled examples: `python3 skills/user-story-maps/scripts/storymap.py build examples/wikipedia-ios` (dark) or `build examples/open-golf` (light).
 
 ## Build outputs (`generated/`)
 
@@ -116,19 +118,20 @@ Files: `docs/story-map/screens/<screen-id>.png`, one device size per app. More: 
 
 | Platform | Helper |
 |---|---|
-| iOS Simulator | `scripts/capture/ios-simulator.sh <id> [-o DIR] [-d "iPhone 16"] [-u deep-link] [-w SECS] [-m light\|dark]` |
-| Android | `scripts/capture/android-emulator.sh <id> [-o DIR] [-s serial] [-u deep-link] [-w SECS] [-n]` |
-| Web | `scripts/capture/web-playwright.py --base-url URL --shots capture.json [--out DIR] [--scale 2] [--dark] [--storage-state FILE]` |
+| iOS Simulator | `<skill>/scripts/capture/ios-simulator.sh <id> [-o DIR] [-d "iPhone 16"] [-u deep-link] [-w SECS] [-m light\|dark]` |
+| Android | `<skill>/scripts/capture/android-emulator.sh <id> [-o DIR] [-s serial] [-u deep-link] [-w SECS] [-n]` |
+| Web | `<skill>/scripts/capture/web-playwright.py --base-url URL --shots capture.json [--out DIR] [--scale 2] [--dark] [--storage-state FILE]` |
 
 ## Repo layout and tests
 
 ```
 skills/user-story-maps/SKILL.md    workflow, schema, rules; references/: outputs, looks, theme, frames, capture-details
-scripts/storymap.py                the generator (one file; stdlib + optional Pillow/PyYAML/Graphviz)
-scripts/capture/                   screenshot helpers: iOS Simulator, Android emulator, web (Playwright)
-templates/                         stories.yaml skeleton, AGENTS.md snippet, .gitignore snippet
+scripts/                          editable source: generator + capture helpers (iOS, Android, web)
+templates/                        editable source: stories.yaml skeleton, README, AGENTS and .gitignore snippets
+skills/user-story-maps/scripts/   bundled copies of scripts/ (generator + capture helpers)
+skills/user-story-maps/templates/ bundled copies of templates/
 examples/                          wikipedia-ios (dark), open-golf (light)
-tests/                             tiny fixture in tests/fixtures/sample-app
+tests/                             tiny fixture in tests/fixtures/sample-app; test_skill_bundle.py checks copy sync and first run
 ```
 
 - Run tests: `python3 -m unittest discover -s tests`. Numpy-based checks are skipped when `numpy` is missing.
@@ -136,5 +139,5 @@ tests/                             tiny fixture in tests/fixtures/sample-app
 ## Dependencies and gotchas
 
 - Python 3.8+. Optional: Pillow (all images), PyYAML, fontTools+brotli (`--embed-fonts`), Graphviz (only without Pillow), mermaid-cli.
-- A font with `google_font: true` is cached in `~/.cache/storymap/fonts`, never in the repo.
+- `google_font` is off by default. When true, the font is downloaded once (the tool's only network request) and cached in `~/.cache/storymap/fonts`, never in the repo. The bundled examples set it to false and ship their fonts.
 - "no stories.yaml found" → pass the folder. "multi-line … not supported" → one line per value or install PyYAML. Images skipped → install Pillow. Dashed screen → no image or its stories are `missing`.

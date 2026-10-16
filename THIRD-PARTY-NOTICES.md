@@ -1,6 +1,6 @@
 # Third-party notices
 
-This repository (MIT, see [LICENSE](LICENSE)) bundles **no third-party device artwork, no fonts and no code from other projects**. This file records what was evaluated, what was decided, and the content that appears in the examples.
+This repository (MIT, see [LICENSE](LICENSE)) bundles **no third-party device artwork or code from other projects**. The examples bundle the open-licensed fonts listed below. This file records what was evaluated, what was decided, and the content that appears in the examples.
 
 ## Device frames (mockups): decision
 
@@ -27,16 +27,17 @@ Result: **no suitably licensed iPhone frame exists for redistribution in a publi
 Device and product names (iPhone, Dynamic Island, Android, ...) are trademarks of their owners and are used only descriptively; the drawn frames are generic and unaffiliated.
 
 ## Fonts
-- **Gelasio** (SIL Open Font License 1.1, https://fonts.google.com/specimen/Gelasio): used for headings in the Wikipedia example (a look-alike for the app's Georgia). It is downloaded on demand into `~/.cache/storymap/fonts` and is not committed as a file. It only draws the PNGs; the HTML viewer uses system fonts and embeds no font by default (opt-in `embed_fonts` embeds a WOFF2 subset, which the OFL allows). Proprietary fonts (Georgia, SF Pro, ...) are only referenced by name, never bundled.
-- **Fira Sans** (SIL Open Font License 1.1, https://fonts.google.com/specimen/Fira+Sans): used for headings in the Open Golf example (the game's own UI font). Downloaded on demand into `~/.cache/storymap/fonts`, never committed; the OFL permits redistribution of the rendered images.
-- Any font you name in `theme:` with `google_font: true` is fetched only if its licence is open (OFL/Apache) and is cached outside the repository.
+- **Gelasio Regular + Bold** (copyright 2022 The Gelasio Project Authors, SIL Open Font License 1.1, https://fonts.google.com/specimen/Gelasio): committed under `examples/wikipedia-ios/fonts/`, with `OFL.txt`. Used for headings in the Wikipedia example (a look-alike for the app's Georgia).
+- **Fira Sans Regular + Bold** (copyright 2012-2015 The Mozilla Foundation and Telefonica S.A., SIL Open Font License 1.1, https://fonts.google.com/specimen/Fira+Sans): committed under `examples/open-golf/fonts/`, with `OFL.txt`. Used for headings in the Open Golf example (the game's own UI font).
+- These font files are unmodified from Google Fonts and are used only to draw the PNGs. The HTML viewer uses system fonts and embeds no font by default (opt-in `embed_fonts` embeds a WOFF2 subset, which the OFL allows). Proprietary fonts (Georgia, SF Pro, ...) are only referenced by name, never bundled.
+- `google_font` is opt-in and off by default. Any font you name in `theme:` with `google_font: true` is fetched only if its licence is open (OFL/Apache) and is cached outside the repository.
 
 ## Example content
 - `examples/wikipedia-ios/`: screenshots and names of the open-source **Wikipedia iOS app** (MIT, https://github.com/wikimedia/wikipedia-ios), captured in the iOS Simulator on 2026-10-15 (app theme dark) from commit `ca8aaeb95639ca82105bcd5510277d8dde0e420e`.
   - Unofficial illustration; not affiliated with or endorsed by the Wikimedia Foundation. Trademarks and content belong to their owners.
   - The app source is MIT (see the upstream repository). The example contains no app source, only screenshots, a test snippet written for this example (`examples/wikipedia-ios/capture/StoryMapShotsUITests.swift`) and generated documents (MIT, like the rest of this repo).
   - Screenshots contain Wikipedia/Wikimedia trademarks and Wikipedia article content (CC BY-SA 4.0: the shown article extract and images come from Wikipedia and its contributors; attribution is given by this notice). Keep this notice if you redistribute them, and remove the example if you do not want to carry third-party content.
-  - Gelasio (headings in the generated PNGs/HTML) is covered under Fonts above. The app itself uses Georgia, which is proprietary and not bundled.
+  - Gelasio (headings in the generated PNGs) is covered under Fonts above. The app itself uses Georgia, which is proprietary and not bundled.
 - `examples/open-golf/`: screenshots and names of the open-source **Open Golf** game (MIT, copyright (c) 2020 Michael Gerdes, https://github.com/mgerdes/Open-Golf), captured in the iOS Simulator on 2026-10-16 from commit `b9029f1e80c3110ae3d4fc9300854bdaeef96508` (the last commit, March 2022).
   - Unofficial illustration; not affiliated with or endorsed by the author. The example contains no game source, only screenshots, generated documents and a story file (MIT, like the rest of this repo); the screens are screenshots of MIT-licensed software (licence checked in the upstream `LICENSE`).
   - Art, as verified in the upstream repo (2026-10-16): the upstream README lists "Kenney Art Assets" (https://kenney.nl/assets) under 3rd party libraries without naming packs. `data/models/nature_kit/License.txt` states **Kenney Nature Kit 2.1, Creative Commons Zero (CC0)**, and `data/models/flag_red.obj` carries a "Created by Kenney" header. The trees, rocks, plants and flag seen in the screenshots come from these, so they are CC0 (attribution is optional and given here anyway).

@@ -19,7 +19,9 @@ theme:                          # dark map for a dark-themed app: black page and
   surface: "#101418"            # gray800
   border: "#2E3136"             # gray650
   heading_font: "Gelasio"       # the app sets titles in Georgia (proprietary): Gelasio is the open (OFL) metric-compatible stand-in
-  google_font: true             # downloaded on demand and cached outside the repo
+  google_font: false            # no network: the heading font ships in fonts/ (SIL OFL, see fonts/OFL.txt)
+  heading_font_file: fonts/Gelasio-Regular.ttf
+  heading_font_file_bold: fonts/Gelasio-Bold.ttf
   device:                       # simulator screenshots in an iPhone mockup (drawn procedurally; no Apple artwork)
     style: auto                 # auto = light titanium frame on a dark theme
     badge: label                # status = dot + label under the device
