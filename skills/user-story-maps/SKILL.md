@@ -13,6 +13,8 @@ Use: app docs, "what is built" audit, gap planning, after any user-visible chang
 
 **Do this first:** run `init docs/story-map --agents`. It adds a block to the repo's `AGENTS.md` (or `CLAUDE.md`) that tells coding agents to keep the map updated; without it they will not. No such file yet? Use `--agents AGENTS.md` to create one. `validate` warns when none mentions the map.
 
+The `--agents` block sits between markers, so running `init --agents` again updates it and never overwrites the rest of the file.
+
 ## Workflow
 
 1. `python3 <skill>/scripts/storymap.py init docs/story-map --agents`. Fill `app` (note commit read), 2–4 `personas`.
@@ -39,6 +41,9 @@ After edits: `validate && build`. Append new items with unique ids; screens need
 | `status [DIR]` | Counts per status / flow / persona |
 | `set-status [--dir DIR] [--no-build] US-03 built --verified "app, 2026-10-15"` | Edit one story in place (keeps comments), rebuild |
 | `theme-from APP_SOURCE [--limit N]` | Read-only scan of colours/fonts → draft `theme:` |
+
+- `init` does not copy `storymap.py` into the app repo; `init --vendor` does (then run `./storymap.py`).
+- Try the bundled examples: `python3 scripts/storymap.py build examples/wikipedia-ios` (dark) or `build examples/open-golf` (light).
 
 ## Build outputs (`generated/`)
 
@@ -115,7 +120,21 @@ Files: `docs/story-map/screens/<screen-id>.png`, one device size per app. More: 
 | Android | `scripts/capture/android-emulator.sh <id> [-o DIR] [-s serial] [-u deep-link] [-w SECS] [-n]` |
 | Web | `scripts/capture/web-playwright.py --base-url URL --shots capture.json [--out DIR] [--scale 2] [--dark] [--storage-state FILE]` |
 
+## Repo layout and tests
+
+```
+skills/user-story-maps/SKILL.md    workflow, schema, rules; references/: outputs, looks, theme, frames, capture-details
+scripts/storymap.py                the generator (one file; stdlib + optional Pillow/PyYAML/Graphviz)
+scripts/capture/                   screenshot helpers: iOS Simulator, Android emulator, web (Playwright)
+templates/                         stories.yaml skeleton, AGENTS.md snippet, .gitignore snippet
+examples/                          wikipedia-ios (dark), open-golf (light)
+tests/                             tiny fixture in tests/fixtures/sample-app
+```
+
+- Run tests: `python3 -m unittest discover -s tests`. Numpy-based checks are skipped when `numpy` is missing.
+
 ## Dependencies and gotchas
 
 - Python 3.8+. Optional: Pillow (all images), PyYAML, fontTools+brotli (`--embed-fonts`), Graphviz (only without Pillow), mermaid-cli.
+- A font with `google_font: true` is cached in `~/.cache/storymap/fonts`, never in the repo.
 - "no stories.yaml found" → pass the folder. "multi-line … not supported" → one line per value or install PyYAML. Images skipped → install Pillow. Dashed screen → no image or its stories are `missing`.
