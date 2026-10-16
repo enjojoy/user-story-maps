@@ -5,7 +5,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "scripts"))
 import storymap as sm  # noqa: E402
 
-EXAMPLE = os.path.join(HERE, "..", "examples", "plant-waterer")
+EXAMPLE = os.path.join(HERE, "fixtures", "sample-app")
 
 
 def codes(issues, level=None):
@@ -73,7 +73,7 @@ class TestValidate(Base):
 
     def test_missing_screenshot_and_unused_screen(self):
         self.edit("image: screens/settings.png", "image: screens/nope.png")
-        self.edit("  - id: sitter-view\n", "  - id: orphan\n    title: Orphan\n    flow: plants\n    not_captured: x\n  - id: sitter-view\n")
+        self.edit("  - id: guest-view\n", "  - id: orphan\n    title: Orphan\n    flow: notes\n    not_captured: x\n  - id: guest-view\n")
         c = codes(self.issues(), "warn")
         self.assertIn("MISSING_IMAGE", c)
         self.assertIn("UNUSED_SCREEN", c)
@@ -87,7 +87,7 @@ class TestValidate(Base):
         self.assertIn("IMAGE_PATH", codes(self.issues(), "error"))
 
     def test_bad_edge(self):
-        self.edit('"welcome -> plant-list: Tap Skip for now"', '"welcome -> nowhere: Tap Skip for now"')
+        self.edit('"welcome -> note-list: Tap Skip for now"', '"welcome -> nowhere: Tap Skip for now"')
         self.assertIn("UNKNOWN_SCREEN", codes(self.issues(), "error"))
 
     def test_long_fields_warn_only_above_each_limit(self):
@@ -235,9 +235,9 @@ class TestTopics(Base):
         self.assertIn(("onboarding", "journey"), sm.cross_topic_edges(m))
 
     def test_screen_can_override_topic(self):
-        self.edit("  - id: sitter-view\n", "  - id: sitter-view\n    topic: journey\n")
+        self.edit("  - id: guest-view\n", "  - id: guest-view\n    topic: journey\n")
         m = sm.load_model(self.dir)
-        self.assertEqual(m["S"]["sitter-view"]["topic_eff"], "journey")
+        self.assertEqual(m["S"]["guest-view"]["topic_eff"], "journey")
 
 
 class TestTheme(Base):
@@ -246,7 +246,7 @@ class TestTheme(Base):
         super().tearDown()
 
     def test_derive_from_primary(self):
-        self.edit('primary: "#3A7D5B"', 'primary: "#3366CC"')
+        self.edit('primary: "#3568B0"', 'primary: "#3366CC"')
         m = sm.load_model(self.dir)
         self.assertEqual(sm.TH["primary"].upper(), "#3366CC")
         for k in sm.STATUS:
@@ -255,16 +255,16 @@ class TestTheme(Base):
         self.assertEqual(len({tp["color"] for tp in m["topics"]}), len(m["topics"]))
 
     def test_explicit_colours_win_and_bad_hex_rejected(self):
-        self.edit('text: "#1F2D26"', 'text: "#112233"\n  status:\n    built: "#00AF89"')
+        self.edit('text: "#223047"', 'text: "#112233"\n  status:\n    built: "#00AF89"')
         sm.load_model(self.dir)
         self.assertEqual(sm.STATUS["built"]["color"], "#00AF89")
         self.assertEqual(sm.TH["ink"], "#112233")
-        self.edit('primary: "#3A7D5B"', 'primary: "green"')
+        self.edit('primary: "#3568B0"', 'primary: "green"')
         with self.assertRaises(sm.SourceError):
             sm.load_model(self.dir)
 
     def test_unknown_font_falls_back(self):
-        self.edit('text: "#1F2D26"', 'text: "#1F2D26"\n  font: "Definitely Not A Real Font 123"')
+        self.edit('text: "#223047"', 'text: "#223047"\n  font: "Definitely Not A Real Font 123"')
         sm.load_model(self.dir)
         self.assertEqual(sm.TH["font"], "Definitely Not A Real Font 123")
         self.assertIn("sans-serif", sm.font_stack(sm.TH["font"]))
@@ -273,7 +273,7 @@ class TestTheme(Base):
             sm.font(20)  # must not raise
 
     def test_embed_fonts_is_a_boolean_and_heading_serif_fallback(self):
-        self.edit('text: "#1F2D26"', 'text: "#1F2D26"\n  heading_font: Georgia\n  embed_fonts: true')
+        self.edit('text: "#223047"', 'text: "#223047"\n  heading_font: Georgia\n  embed_fonts: true')
         m = sm.load_model(self.dir)
         self.assertTrue(sm.TH["embed_fonts"])
         self.assertIn('"Georgia",Georgia,"Times New Roman",serif', sm.heading_font_stack())
@@ -288,7 +288,7 @@ class TestTheme(Base):
             self.assertFalse(sm.TH["embed_fonts"])
 
     def test_theme_applies_to_generated_text(self):
-        self.edit('primary: "#3A7D5B"', 'primary: "#C2185B"')
+        self.edit('primary: "#3568B0"', 'primary: "#C2185B"')
         sm.load_model(self.dir)
         self.assertEqual(sm.TC("#2D7A5C").upper(), sm.TH["primary"].upper())
         self.assertIn(sm.TH["primary"], sm.themeify('color="#2D7A5C"'))
@@ -312,12 +312,12 @@ class TestBuild(Base):
         return sm.main(list(args))
 
     def test_build_and_persona_rename(self):
-        self.edit("name: Busy gardener", "name: Garden enthusiast")
-        self.edit("as_a: busy gardener", "as_a: garden enthusiast")
+        self.edit("name: Busy writer", "name: Note enthusiast")
+        self.edit("as_a: busy writer", "as_a: note enthusiast")
         self.assertEqual(self.run_main("build", self.dir, "--formats", "report"), 0)
         md = open(os.path.join(self.dir, "generated", "REPORT.md"), encoding="utf-8").read()
-        self.assertIn("As a garden enthusiast", md)
-        self.assertNotIn("busy gardener", md)
+        self.assertIn("As a note enthusiast", md)
+        self.assertNotIn("busy writer", md)
         self.assertIn("## Topics", md)
         self.assertIn("### Onboarding", md)
         self.assertNotIn("```mermaid", md)
@@ -371,7 +371,7 @@ class TestBuild(Base):
         m = sm.load_model(self.dir)
         path = os.path.join(self.dir, "generated", "REPORT.md")
         text = open(path, encoding="utf-8").read()
-        self.assertTrue(text.startswith("# Plant Waterer - story map report\n"))
+        self.assertTrue(text.startswith("# Pocket Notes - story map report\n"))
         self.assertIn("edit the source, not this file", text)
         self.assertIn("## Topics", text)
         self.assertIn("## Stories", text)
@@ -402,7 +402,7 @@ class TestBuild(Base):
         self.assertEqual(open(path, encoding="utf-8").read(), before)
 
     def test_report_escapes_table_cells(self):
-        self.edit("notes: Only 4 species in the list so far.", 'notes: "Only | four\\nspecies in the list."')
+        self.edit("notes: Only 4 templates in the list so far.", 'notes: "Only | four\\ntemplates in the list."')
         self.edit("want: to understand what the app does before I add anything", 'want: "to understand | everything"')
         import contextlib, io
         with contextlib.redirect_stdout(io.StringIO()):
@@ -410,7 +410,7 @@ class TestBuild(Base):
         text = open(os.path.join(self.dir, "generated", "REPORT.md"), encoding="utf-8").read()
         self.assertIn("understand \\| everything", text)
         self.assertIn("Only \\| four", text)
-        self.assertNotIn("four\nspecies", text)
+        self.assertNotIn("four\ntemplates", text)
 
     def test_report_prose_stays_readable_and_only_link_labels_escape_brackets(self):
         m = sm.load_model(self.dir)
@@ -418,8 +418,8 @@ class TestBuild(Base):
         escaped = 'Settings & "sharing" \'notes\' snake_case *start* [screen] `ready` \\| &lt;now> next'
         m["topics"][0]["title"] = prose
         m["S"]["welcome"]["title"] = prose
-        m["S"]["add-plant"]["title"] = prose
-        m["S"]["add-plant"]["image"] = ""
+        m["S"]["add-note"]["title"] = prose
+        m["S"]["add-note"]["image"] = ""
         m["stories"][0]["notes"] = prose
         m["stories"][0]["where"] = "src/screens/Welcome"
         gen = os.path.join(self.dir, "generated")

@@ -10,7 +10,7 @@
 #     --list        list available devices and exit
 #
 # Typical loop: navigate the app to a screen by hand (or by deep link), then run
-#   ios-simulator.sh welcome ; ios-simulator.sh plant-list -u plantwaterer://list
+#   ios-simulator.sh welcome ; ios-simulator.sh home -u myapp://home
 # The file is written as <DIR>/<screen-id>.png, which is what `image:` in stories.yaml points to.
 set -euo pipefail
 command -v xcrun >/dev/null || { echo "xcrun not found - this script needs macOS with Xcode command line tools." >&2; exit 1; }
