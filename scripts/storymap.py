@@ -46,6 +46,10 @@ DEVICE_MODELS = ("iphone-island", "iphone-notch", "iphone-home-button", "android
 DEVICE_STYLES = ("auto", "black", "titanium", "light")
 HTML_BUDGET = 4_500_000   # bytes of embedded images + fonts; story-map.html stays under about 5 MB
 SOURCE_NAMES = ("stories.yaml", "stories.yml", "stories.json")
+FORMATS = ("html", "arch", "onepager", "report", "csv", "mermaid", "dot", "flows", "flow-map", "overview", "pdf", "crops", "legacy-md")
+LEAN_FORMATS = set(("html", "arch", "onepager", "report"))
+ONLY_FORMATS = dict(docs={"report", "csv", "legacy-md"}, mermaid={"mermaid"},
+                    diagrams={"arch", "crops", "flows", "flow-map", "overview"}, html={"html"}, pdf={"onepager", "pdf"})
 
 
 class SourceError(Exception):
@@ -627,6 +631,86 @@ def legend_md():
 
 
 # --------------------------------------------------------------------------- markdown / csv
+def report_text(value):
+    """Literal prose in GitHub Markdown, including table cells."""
+    return html.escape(str(value), quote=False).replace("\\", "\\\\").replace("|", "\\|").replace("\r", " ").replace("\n", " ").replace("`", "\\`").replace("[", "\\[").replace("]", "\\]").replace("*", "\\*").replace("_", "\\_")
+
+
+def report_code(value):
+    value = str(value).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+    ticks = "`" * (max([len(t) for t in re.findall(r"`+", value)] or [0]) + 1)
+    return ticks + " " + value + " " + ticks
+
+
+def gen_report(m, gen, expected):
+    text = report_text
+    L = ["# %s - story map report" % text(m["app"]["name"]), "",
+         "_Generated from `stories.yaml` by storymap.py - edit the source, not this file._", ""]
+    if header_line(m):
+        L += [text(header_line(m)), ""]
+    if m["app"]["summary"]:
+        L += [text(m["app"]["summary"]), ""]
+    if m["app"]["disclaimer"]:
+        L += ["> " + text(m["app"]["disclaimer"]), ""]
+    L += ["**%d stories:** " % len(m["stories"]) + " · ".join("%s %d %s" % (STATUS[k]["emoji"], n, k) for k, n in counts(m["stories"]).items()),
+          "Built = checked in code/running app (see Verified); unverified = not checked yet.", ""]
+    links = []
+    for path in ("architecture.png", "one-pager.png", "one-pager.pdf", "story-map.html", "flows/", "overview.png", "mermaid/"):
+        requested = path in expected or (path.endswith("/") and any(p.startswith(path) for p in expected))
+        if requested and os.path.exists(os.path.join(gen, path)):
+            links.append("[%s](%s)" % (path, path))
+    if links:
+        L += [" · ".join(links), ""]
+    L += ["## Topics", "", "| Topic | Screens | Stories | Status counts | Flows |", "|---|---|---|---|---|"]
+    for r in topic_summary(m):
+        L.append("| %s | %d | %d | %s | %s |" % (
+            text(r["topic"]["title"]), len(r["screens"]), len(r["stories"]),
+            " · ".join("%s %d" % (STATUS[k]["emoji"], n) for k, n in r["counts"].items()),
+            text(", ".join(f["title"] for f in r["flows"]))))
+    for (a, b), edges in cross_topic_edges(m).items():
+        labels = list(collections.OrderedDict.fromkeys(e["label"] for e in edges if e["label"]))[:4]
+        L.append("\n- %s -> %s%s" % (text(topic_title(m, a)), text(topic_title(m, b)), ": " + text(", ".join(labels)) if labels else ""))
+    L += ["", "## Stories", ""]
+    for tp, us in stories_by_topic(m):
+        L += ["### " + text(tp["title"] if tp else "Unassigned"), ""]
+        if tp and tp["description"]:
+            L += [text(tp["description"]), ""]
+        L += ["| ID | Story | Screens | Status | Evidence |", "|---|---|---|---|---|"]
+        for u in us:
+            shots = []
+            for sid in u["screens"]:
+                s = m["S"].get(sid)
+                title = text(s["title"] if s else sid)
+                shots.append("[%s](../%s)" % (title, urllib.parse.quote(s["image"].replace("\\", "/"), safe="/"))
+                             if s and image_exists(m, s) else title)
+            evidence = []
+            for field, label in (("verified", "verified"), ("where", "where"), ("notes", "note")):
+                if u[field]:
+                    evidence.append(label + ": " + (report_code(u[field]) if field == "where" else text(u[field])))
+            L.append("| %s | %s | %s | %s %s | %s |" % (text(u["id"]), text(story_text(m, u)), ", ".join(shots),
+                     STATUS.get(u["status"], {}).get("emoji", "?"), text(u["status"]), "; ".join(evidence)))
+        L.append("")
+    L += ["## Gaps and risks", ""]
+    for severity in SEVERITIES:
+        gaps = [g for g in m["gaps"] if g["severity"] == severity]
+        if not gaps:
+            continue
+        L += ["### " + severity.title(), ""]
+        for g in gaps:
+            line = "- **%s - %s**" % (text(g["id"]), text(g["title"]))
+            if g["detail"]:
+                line += " - " + text(g["detail"]).rstrip(". ") + "."
+            if g["where"]:
+                line += " Where: " + report_code(g["where"]) + "."
+            if g["stories"]:
+                line += " Stories: " + ", ".join(text(uid) for uid in g["stories"]) + "."
+            L.append(line)
+        L.append("")
+    if not m["gaps"]:
+        L += ["No gaps or risks recorded.", ""]
+    write(os.path.join(gen, "REPORT.md"), "\n".join(L))
+
+
 def stories_by_topic(m):
     """[(topic or None, [stories])] in topic order; stories without a known topic go last."""
     out = [(tp, [u for u in m["stories"] if u["topic_eff"] == tp["id"]]) for tp in m["topics"]]
@@ -832,7 +916,7 @@ def story_map_table(m):
     return "\n".join(L)
 
 
-def gen_mermaid(m, gen, render=True):
+def gen_mermaid(m, gen, render=True, sources=True, legacy=True):
     files = []
     md = ["# %s - story map" % m["app"]["name"], "",
           "_Generated from `stories.yaml`. The diagrams below render on GitHub. Screens with real screenshots are in "
@@ -847,18 +931,21 @@ def gen_mermaid(m, gen, render=True):
            "```mermaid", mermaid_architecture(m).rstrip(), "```", "",
            "## Story map (personas x flows)", "", story_map_table(m), "",
            "## Flows overview", "", "```mermaid", mermaid_overview(m).rstrip(), "```", ""]
-    write(os.path.join(gen, "mermaid", "architecture.mmd"), mermaid_architecture(m))
-    write(os.path.join(gen, "mermaid", "topics.mmd"), mermaid_topics(m))
-    write(os.path.join(gen, "mermaid", "00-overview.mmd"), mermaid_overview(m))
+    if sources:
+        write(os.path.join(gen, "mermaid", "architecture.mmd"), mermaid_architecture(m))
+        write(os.path.join(gen, "mermaid", "topics.mmd"), mermaid_topics(m))
+        write(os.path.join(gen, "mermaid", "00-overview.mmd"), mermaid_overview(m))
     for i, f in enumerate(m["flows"], 1):
         txt = mermaid_flow(m, f["id"])
-        write(os.path.join(gen, "mermaid", "%02d-%s.mmd" % (i, f["id"])), txt)
+        if sources:
+            write(os.path.join(gen, "mermaid", "%02d-%s.mmd" % (i, f["id"])), txt)
         md += ["## %s" % f["title"], ""]
         if f["description"]:
             md += [f["description"], ""]
         md += ["```mermaid", txt.rstrip(), "```", ""]
-    write(os.path.join(gen, "story-map.md"), "\n".join(md))
-    if render and shutil.which("mmdc"):
+    if legacy:
+        write(os.path.join(gen, "story-map.md"), "\n".join(md))
+    if sources and render and shutil.which("mmdc"):
         for fn in sorted(os.listdir(os.path.join(gen, "mermaid"))):
             if fn.endswith(".mmd"):
                 src = os.path.join(gen, "mermaid", fn)
@@ -2109,11 +2196,11 @@ def pil_overview(m, out, z=1.0):
     render_cards(cards, edges, m["app"]["name"] + " - flows overview", header_line(m), out, maxrows=4, z=zt)
 
 
-def pil_full(m, out):
+def pil_full(m, out, flow_dir=None):
     """Fallback for the all-in-one map: every flow image stacked vertically."""
     tmp = []
     for f in m["flows"]:
-        p = os.path.join(os.path.dirname(out), "flows", "%s.png" % f["id"])
+        p = os.path.join(flow_dir or os.path.join(os.path.dirname(out), "flows"), "%s.png" % f["id"])
         if os.path.isfile(p):
             tmp.append(Image.open(p).convert("RGB"))
     if not tmp:
@@ -2260,7 +2347,7 @@ def _arch_layout(rows, cards, rn, z, dtmp, m):
     return dict(pos=pos, bands=bands, W=W, H=H, TOP=TOP, PAD=PAD)
 
 
-def pil_architecture(m, out, z=1.0):
+def pil_architecture(m, out, z=1.0, crops=True, save=True):
     """Topic swimlanes left to right, compact screen cards inside, cross-topic arrows on top. Drawn at zoom z, so every
     screenshot is at >= its native pixels (z from native_zoom). The number of grid rows per lane is chosen for a
     page that is neither very wide nor very tall. Also writes one full-resolution crop per topic next to `out`."""
@@ -2345,63 +2432,83 @@ def pil_architecture(m, out, z=1.0):
             d.rounded_rectangle((mx - w / 2, my - h / 2, mx + w / 2, my + h / 2), Z(6), fill=TH["bg"], outline=col, width=Z(2))
             for i, l in enumerate(lines_):
                 d.text((mx - w / 2 + Z(7), my - h / 2 + Z(4) + i * Z(22)), l, font=f, fill=col)
-    img.save(out, optimize=True)
-    tdir = os.path.splitext(out)[0]            # architecture/<topic>.png: one full-resolution crop per topic lane
-    shutil.rmtree(tdir, ignore_errors=True)
-    os.makedirs(tdir, exist_ok=True)
-    for r, bx, bw, bh, sub in bands:
-        pad = Z(20)
-        img.crop((max(0, bx - pad), max(0, TOP - pad), min(W, bx + bw + pad), min(H, TOP + bh + pad))).save(
-            os.path.join(tdir, r["topic"]["id"] + ".png"), optimize=True)
+    if save:
+        img.save(out, optimize=True)
+    if crops:
+        tdir = os.path.splitext(out)[0]            # full-resolution crops per topic lane
+        os.makedirs(tdir, exist_ok=True)
+        for r, bx, bw, bh, sub in bands:
+            pad = Z(20)
+            img.crop((max(0, bx - pad), max(0, TOP - pad), min(W, bx + bw + pad), min(H, TOP + bh + pad))).save(
+                os.path.join(tdir, r["topic"]["id"] + ".png"), optimize=True)
     return dict(cards={sid: pos[sid] + cards[sid].size for sid in pos},
                 bands=[(r["topic"]["id"], bx, TOP, bw, bh) for r, bx, bw, bh, sub in bands])
 
 
-def gen_diagrams(m, gen, use_graphviz=True):
-    """flows/<id>.png, overview.png, flow-map.png, architecture.png (+ architecture/<topic>.png). With Pillow every
-    screenshot is drawn at >= native pixels (see native_zoom). Returns notes for the summary."""
+def gen_diagrams(m, gen, use_graphviz=True, formats=None):
+    """Render requested diagrams, preserving native screenshot resolution with Pillow."""
+    formats = set(formats) if formats is not None else {"arch", "crops", "flows", "flow-map", "overview"}
     notes = []
-    if not HAVE_PIL and not (use_graphviz and shutil.which("dot")):
-        return ["skipped diagrams (need Pillow or Graphviz)"]
-    set_diagram("thumbs")
-    thumbs = make_thumbs(m, gen)
+    os.makedirs(gen, exist_ok=True)
+    gv = use_graphviz and shutil.which("dot") and not HAVE_PIL
     dotdir = os.path.join(gen, "dot")
-    gv = use_graphviz and shutil.which("dot") and not HAVE_PIL    # Graphviz draws screenshots small: only without Pillow
-    os.makedirs(os.path.join(gen, "flows"), exist_ok=True)
+    thumbs = {}
+    if gv or "dot" in formats:
+        set_diagram("thumbs")
+        thumbs = make_thumbs(m, gen)
+    jobs = [("overview", "overview", lambda: dot_overview(m, thumbs), "overview.png", 130),
+            ("flow-map", "flow-map", lambda: dot_full(m, thumbs), "flow-map.png", 96),
+            ("arch", "architecture", lambda: dot_architecture(m, thumbs), "architecture.png", 110)]
+    jobs += [("flows", f["id"], lambda fid=f["id"]: dot_flow(m, fid, thumbs),
+              "flows/" + f["id"] + ".png", 144) for f in m["flows"]]
+    for kind, name, source, output, dpi in jobs:
+        if "dot" in formats or (gv and kind in formats):
+            path = os.path.join(dotdir, name + ".dot")
+            write(path, dot_text(source()))
+            if gv and kind in formats:
+                os.makedirs(os.path.dirname(os.path.join(gen, output)), exist_ok=True)
+                if not run_dot(path, os.path.join(gen, output), dpi):
+                    notes.append("graphviz failed on " + name)
     if HAVE_PIL:
         del RES_LOG[:]
-        shutil.rmtree(dotdir, ignore_errors=True)
-        zf = m["_zoom_flow"] = native_zoom(m, (LANDSCAPE_W, PORTRAIT_H), 2.0)
-        za = native_zoom(m, ARCH_BOX)
-        zo = native_zoom(m, OVERVIEW_BOX)
-        set_diagram("overview")
-        pil_overview(m, os.path.join(gen, "overview.png"), zo)
-        _DEV_CACHE.clear()           # native-size device images are large: do not keep them between diagrams
-        for f in m["flows"]:
-            set_diagram("flows/" + f["id"])
-            pil_flow(m, f["id"], os.path.join(gen, "flows", f["id"] + ".png"))
-        _DEV_CACHE.clear()
-        set_diagram("flow-map")
-        fm = os.path.join(gen, "flow-map.png")
-        if os.path.isfile(fm):
-            os.remove(fm)              # never leave a stale (smaller, older) all-in-one image next to the new ones
-        pil_full(m, fm)
-        set_diagram("architecture")
-        pil_architecture(m, os.path.join(gen, "architecture.png"), za)
-        _DEV_CACHE.clear()
-        set_diagram("other")
-        notes.append("diagrams at native screenshot resolution (zoom: flows %.1fx, architecture %.1fx, overview %.1fx)" % (zf, za, zo))
-        return notes
-    jobs = [("overview", dot_overview(m, thumbs), os.path.join(gen, "overview.png"), 130),
-            ("flow-map", dot_full(m, thumbs), os.path.join(gen, "flow-map.png"), 96)]
-    jobs += [(f["id"], dot_flow(m, f["id"], thumbs), os.path.join(gen, "flows", f["id"] + ".png"), 144) for f in m["flows"]]
-    for name, text, png, dpi in jobs:
-        write(os.path.join(dotdir, name + ".dot"), dot_text(text))
-        if not run_dot(os.path.join(dotdir, name + ".dot"), png, dpi):
-            return notes + ["graphviz failed on %s" % name]
-    write(os.path.join(dotdir, "architecture.dot"), dot_text(dot_architecture(m, thumbs)))
-    run_dot(os.path.join(dotdir, "architecture.dot"), os.path.join(gen, "architecture.png"), 110)
-    return [n for n in notes if n] + ["Graphviz without Pillow: screenshots are not at native resolution (install Pillow)"]
+        if "flows" in formats or "flow-map" in formats:
+            m["_zoom_flow"] = native_zoom(m, (LANDSCAPE_W, PORTRAIT_H), 2.0)
+        if "overview" in formats:
+            set_diagram("overview")
+            pil_overview(m, os.path.join(gen, "overview.png"), native_zoom(m, OVERVIEW_BOX))
+            _DEV_CACHE.clear()
+        if "flows" in formats:
+            os.makedirs(os.path.join(gen, "flows"), exist_ok=True)
+            for f in m["flows"]:
+                set_diagram("flows/" + f["id"])
+                pil_flow(m, f["id"], os.path.join(gen, "flows", f["id"] + ".png"))
+                _DEV_CACHE.clear()
+        if "flow-map" in formats:
+            set_diagram("flow-map")
+            if "flows" in formats:
+                rendered = pil_full(m, os.path.join(gen, "flow-map.png"))
+            else:
+                with tempfile.TemporaryDirectory(prefix="storymap-flows-") as work:
+                    for f in m["flows"]:
+                        set_diagram("flows/" + f["id"])
+                        pil_flow(m, f["id"], os.path.join(work, f["id"] + ".png"))
+                        _DEV_CACHE.clear()
+                    set_diagram("flow-map")
+                    rendered = pil_full(m, os.path.join(gen, "flow-map.png"), flow_dir=work)
+            if not rendered:
+                notes.append("flow-map.png skipped (no flows or exceeds 300 megapixels)")
+            _DEV_CACHE.clear()
+        if "arch" in formats or "crops" in formats:
+            set_diagram("architecture")
+            pil_architecture(m, os.path.join(gen, "architecture.png"), native_zoom(m, ARCH_BOX),
+                             crops="crops" in formats, save="arch" in formats)
+            _DEV_CACHE.clear()
+    elif gv:
+        notes.append("Graphviz without Pillow: screenshots are not at native resolution (install Pillow)")
+    elif formats - {"dot"}:
+        notes.append("skipped diagrams (need Pillow or Graphviz)")
+    set_diagram("other")
+    return notes
 
 
 # --------------------------------------------------------------------------- single-file HTML viewer
@@ -2516,7 +2623,7 @@ th{background:#eef1f3;position:sticky;top:105px}tr.hide{display:none}td.st{white
 const D=__DATA__, IMG=__IMGS__, OVL=__OVL__, PH=__PH__;
 const S={st:new Set(Object.keys(D.statuses)),persona:'',topic:'',q:'',tab:'arch'};
 const TOPICS=Object.fromEntries(D.topics.map(t=>[t.id,t]));const tc=id=>(TOPICS[id]||{color:'#999'}).color;const tt=id=>(TOPICS[id]||{title:id||'Unassigned'}).title;
-const TABS=['arch','flows','stories','map','gaps','overview'];
+const TABS=['arch','flows','stories','map','gaps',...(IMG.__overview?['overview']:[])];
 const $=(h)=>{const t=document.createElement('template');t.innerHTML=h.trim();return t.content.firstChild};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const col=s=>(D.statuses[s]||{color:'#999'}).color;
@@ -2534,6 +2641,7 @@ function bar(){const b=document.getElementById('bar');b.innerHTML='';
  const q=$(`<input placeholder="Search stories..." value="${esc(S.q)}">`);q.oninput=e=>{S.q=e.target.value.toLowerCase();clearTimeout(window._t);window._t=setTimeout(render,200)};b.append(q);
  const t=document.getElementById('tabs');t.innerHTML='';
  for(const [k,l] of [['arch','Architecture'],['flows','Screens by topic'],['stories','Stories'],['map','Story map'],['gaps','Gaps & risks'],['overview','Flows overview']]){
+  if(k==='overview'&&!IMG.__overview)continue;
   const x=$(`<button class="${S.tab===k?'on':''}">${l}</button>`);x.onclick=()=>{S.tab=k;render()};t.append(x)}}
 const pc=v=>(v*100).toFixed(3)+'%';
 function dev(id,click){const s=D.screens[id],f=s.frame,oc=click===false?'':` onclick="lb('${id}')"`;
@@ -2581,7 +2689,7 @@ render();
 """
 
 
-def gen_html(m, gen):
+def gen_html(m, gen, available=None):
     flows = [dict(id=f["id"], title=f["title"], description=f["description"], topic=f["topic"],
                   screens=flow_screens(m, f["id"])) for f in m["flows"]]
     outs = collections.defaultdict(list)
@@ -2630,8 +2738,8 @@ def gen_html(m, gen):
     base_extra = len(font_face_css()) + sum(len(v) for v in ovl.values()) + sum(len(v[0]) for v in phs.values())
     imgs, ov, ar = {}, "", ""
     for max_h, q, dw in [(1000, 85, 3600), (900, 80, 3200), (800, 78, 2800), (700, 75, 2400), (600, 70, 2000), (500, 65, 1600)]:   # keep the page under ~5 MB
-        ov = embed_diagram(os.path.join(gen, "overview.png"), dw, q + 3)
-        ar = embed_diagram(os.path.join(gen, "architecture.png"), dw, q + 3)
+        ov = embed_diagram(os.path.join(gen, "overview.png"), dw, q + 3) if available is None or "overview.png" in available else ""
+        ar = embed_diagram(os.path.join(gen, "architecture.png"), dw, q + 3) if available is None or "architecture.png" in available else ""
         extra = base_extra + len(ov) + len(ar)
         imgs = {s["id"]: embed_image(m, s, max_h, 1400, q) for s in m["screens"]}
         imgs = {k: v for k, v in imgs.items() if v}
@@ -2696,7 +2804,7 @@ def topic_schematic(m, d, x0, y0, w, h, Z):
             d.text((Z((xa + xb) / 2), Z(ya - 12)), "x%d" % pairs[(a, b)], font=f2, fill=col, anchor="mm")
 
 
-def gen_onepager(m, gen):
+def gen_onepager(m, gen, pdf=True):
     """One page: status counts, topic map, topic table, top gaps and a contact sheet of every screen. Drawn at a zoom Z
     chosen so that every screenshot in the contact sheet is at >= its native pixels; the page grows downwards as needed."""
     if not HAVE_PIL:
@@ -2851,33 +2959,10 @@ def gen_onepager(m, gen):
     set_diagram("other")
     png = os.path.join(gen, "one-pager.png")
     img.save(png, optimize=True)
-    img.save(os.path.join(gen, "one-pager.pdf"), "PDF", resolution=150.0 * zz)
+    if pdf:
+        img.save(os.path.join(gen, "one-pager.pdf"), "PDF", resolution=150.0 * zz)
     _DEV_CACHE.clear()
     return ""
-
-
-# --------------------------------------------------------------------------- generated/README
-def gen_readme(m, gen):
-    have = lambda p: os.path.exists(os.path.join(gen, p))
-    rows = [("story-map.html", "Single-file viewer: architecture tab, click a screen to enlarge, filter by status / persona / topic, search. Open in any browser."),
-            ("one-pager.pdf", "One-page A3 overview (also `one-pager.png`): status counts, topic table, architecture, top gaps, all screens."),
-            ("architecture.png", "Architecture by topic: screens (in device frames) grouped in coloured topic swimlanes, cross-topic arrows highlighted."),
-            ("overview.png", "How the flows connect, with status counts."),
-            ("flows/<flow>.png", "One diagram per flow: real screenshots in device frames as nodes, a status badge under each, arrows labelled with the action."),
-            ("flow-map.png", "All flows in one big image."),
-            ("story-map.md", "Story map table + Mermaid diagrams (render directly on GitHub)."),
-            ("user-stories.md / .csv", "Every story with persona, screens, status, where it lives, verified-how, notes."),
-            ("gaps-and-risks.md", "Gaps and risks ordered by severity."),
-            ("mermaid/architecture.mmd, topics.mmd", "Topic architecture as Mermaid (subgraphs per topic); also embedded in `story-map.md`."),
-            ("mermaid/*.mmd", "Mermaid sources (edit nothing here; they are regenerated)."),
-            ("thumbs/*.png", "Framed device images (transparent PNG) that Graphviz draws as node pictures."),
-            ("dot/*.dot", "Graphviz sources (only when Graphviz is installed).")]
-    L = ["# Generated files", "", "Everything here is produced from `../stories.yaml` by `storymap.py build`. "
-         "**Do not edit these files by hand - your changes are overwritten.**", "", "| File | What it is |", "|---|---|"]
-    for f, t in rows:
-        L.append("| `%s` | %s |" % (f, t))
-    L.append("")
-    write(os.path.join(gen, "README.md"), "\n".join(L))
 
 
 # --------------------------------------------------------------------------- theme (follow the documented app's design)
@@ -3396,55 +3481,138 @@ def cmd_status(a):
     return 0
 
 
+def build_formats(a):
+    formats = set(FORMATS) if getattr(a, "profile", "lean") == "full" else set(LEAN_FORMATS)
+    only = getattr(a, "only", None)
+    value = getattr(a, "formats", None)
+    if only is not None:
+        if value is not None:
+            raise SourceError("--only cannot be combined with --formats")
+        tokens = [t.strip() for t in only.split(",")]
+        unknown = [t for t in tokens if t not in ONLY_FORMATS]
+        if unknown:
+            raise SourceError("unknown --only value: %s; valid names: %s" % (", ".join(unknown), ", ".join(ONLY_FORMATS)))
+        print("note: --only is deprecated; use --formats instead")
+        formats = set().union(*(ONLY_FORMATS[t] for t in tokens))
+    if value is not None:
+        tokens = [t.strip() for t in value.split(",")]
+        modify = any(t.startswith(("+", "-")) for t in tokens)
+        if not modify:
+            formats = set()
+        for token in tokens:
+            name = token[1:] if token.startswith(("+", "-")) else token
+            if name not in FORMATS:
+                raise SourceError("unknown format '%s'; valid names: %s" % (name, ", ".join(FORMATS)))
+            if token.startswith("-"):
+                formats.discard(name)
+            else:
+                formats.add(name)
+    return formats
+
+
+def output_paths(m, formats, use_graphviz=True):
+    """Known requested paths, including children so stale members can be cleaned safely."""
+    paths = set()
+    singles = dict(html="story-map.html", arch="architecture.png", report="REPORT.md", csv="user-stories.csv",
+                   overview="overview.png", **{"flow-map": "flow-map.png", "pdf": "one-pager.pdf"})
+    for key, path in singles.items():
+        if key in formats:
+            paths.add(path)
+    if formats & {"onepager", "pdf"}:
+        paths.add("one-pager.png")
+    if "legacy-md" in formats:
+        paths.update(("story-map.md", "user-stories.md", "gaps-and-risks.md"))
+    if "flows" in formats:
+        paths.update("flows/" + f["id"] + ".png" for f in m["flows"])
+    if "crops" in formats:
+        paths.update("architecture/" + r["topic"]["id"] + ".png" for r in topic_summary(m) if r["screens"])
+    if "mermaid" in formats:
+        paths.update(("mermaid/architecture.mmd", "mermaid/topics.mmd", "mermaid/00-overview.mmd"))
+        paths.update("mermaid/%02d-%s.mmd" % (i, f["id"]) for i, f in enumerate(m["flows"], 1))
+    if "dot" in formats or (not HAVE_PIL and use_graphviz and shutil.which("dot") and formats & {"arch", "flows", "overview", "flow-map"}):
+        paths.update("dot/" + name + ".dot" for name in ["architecture", "overview", "flow-map"] + [f["id"] for f in m["flows"]])
+        paths.update("thumbs/" + s["id"] + ".png" for s in m["screens"])
+    return paths
+
+
+def stale_outputs(gen, expected, clean=False):
+    known_files = {"REPORT.md", "story-map.html", "architecture.png", "one-pager.png", "one-pager.pdf", "overview.png",
+                   "flow-map.png", "story-map.md", "user-stories.md", "user-stories.csv", "gaps-and-risks.md", "README.md"}
+    known_dirs = {"flows", "architecture", "mermaid", "dot", "thumbs"}
+    stale = []
+    for root, dirs, files in os.walk(gen, followlinks=False):
+        for name in files:
+            rel = os.path.relpath(os.path.join(root, name), gen).replace("\\", "/")
+            if (rel in known_files or rel.split("/")[0] in known_dirs) and rel not in expected:
+                stale.append(rel)
+        for name in dirs[:]:
+            path = os.path.join(root, name)
+            if os.path.islink(path):
+                dirs.remove(name)
+                rel = os.path.relpath(path, gen).replace("\\", "/")
+                if rel in known_dirs and not any(p.startswith(rel + "/") for p in expected):
+                    stale.append(rel)
+    if clean:
+        for rel in stale:
+            os.remove(os.path.join(gen, rel))
+        for root, dirs, files in os.walk(gen, topdown=False, followlinks=False):
+            if root != gen and os.path.relpath(root, gen).split(os.sep)[0] in known_dirs and not os.listdir(root):
+                os.rmdir(root)
+    elif stale:
+        print("stale (use --clean): " + ", ".join(sorted(stale)))
+
+
 def cmd_build(a):
+    formats = build_formats(a)
     d = resolve_dir(a.dir)
     m = load_model(d)
     print("Building %s from %s" % (m["app"]["name"], os.path.relpath(m["source"])))
-    issues = validate(m)
-    ne, nw = report(issues, quiet_ok=True)
+    ne, nw = report(validate(m), quiet_ok=True)
     if ne and not a.force:
-        print("\nNot building: fix the %d error(s) above (or use --force)." % ne)
+        print("Not building: fix the %d error(s) above (or use --force)." % ne)
         return 1
     if a.strict and nw:
-        print("\nNot building: --strict and %d warning(s)." % nw)
+        print("Not building: --strict and %d warning(s)." % nw)
         return 1
     gen = os.path.join(d, "generated")
-    only = set(a.only.split(",")) if a.only else None
-    want = lambda k: only is None or k in only
-    done = []
-    if want("docs"):
-        gen_stories_md(m, gen); gen_stories_csv(m, gen); gen_gaps_md(m, gen)
-        done += ["user-stories.md", "user-stories.csv", "gaps-and-risks.md"]
-    if want("mermaid"):
-        gen_mermaid(m, gen)
-        done += ["story-map.md", "mermaid/*.mmd"]
-    if want("diagrams"):
-        notes = gen_diagrams(m, gen, use_graphviz=not a.no_graphviz)
-        done += ["architecture.png", "overview.png", "flows/*.png"] + (["flow-map.png"] if os.path.isfile(os.path.join(gen, "flow-map.png")) else []) \
-            if not any("skipped" in n for n in notes) else []
-        for n in notes:
-            print("  note  " + n)
-    if want("html"):
-        gen_html(m, gen)
-        done.append("story-map.html")
-    if want("pdf"):
-        r = gen_onepager(m, gen)
-        if r:
-            print("  note  " + r)
-        else:
-            done.append("one-pager.pdf (+png)")
-    gen_readme(m, gen)
-    print("\nWrote to %s:" % os.path.relpath(gen))
-    for x in done:
-        print("  - " + x)
-    print("Done. %d stories: %s" % (len(m["stories"]), ", ".join("%d %s" % (n, k) for k, n in counts(m["stories"]).items())))
+    os.makedirs(gen, exist_ok=True)
+    expected = output_paths(m, formats, use_graphviz=not a.no_graphviz)
+    if "legacy-md" in formats:
+        gen_stories_md(m, gen)
+        gen_gaps_md(m, gen)
+    if "csv" in formats:
+        gen_stories_csv(m, gen)
+    if formats & {"mermaid", "legacy-md"}:
+        gen_mermaid(m, gen, render=False, sources="mermaid" in formats, legacy="legacy-md" in formats)
+    diagrams = formats & {"arch", "crops", "flows", "flow-map", "overview", "dot"}
+    if diagrams:
+        for note in gen_diagrams(m, gen, use_graphviz=not a.no_graphviz, formats=diagrams):
+            print("  note  " + note)
+            if note.startswith("flow-map.png skipped"):
+                expected.discard("flow-map.png")
+    if formats & {"onepager", "pdf"}:
+        note = gen_onepager(m, gen, pdf="pdf" in formats)
+        if note:
+            print("  note  " + note)
+    if "html" in formats:
+        gen_html(m, gen, available=expected if getattr(a, "clean", False) else None)
+    if "report" in formats:
+        gen_report(m, gen, expected)
+    stale_outputs(gen, expected, clean=getattr(a, "clean", False))
+    print("Wrote to %s:" % os.path.relpath(gen))
+    for path in sorted(expected):
+        dest = os.path.join(gen, path)
+        if os.path.isfile(dest):
+            size = os.path.getsize(dest)
+            print("  %s (%s)" % (path, ("%.1f MB" % (size / 1048576)) if size >= 1048576 else ("%.1f KB" % (size / 1024))))
+    print("opt-in: %s (use --formats +name or --profile full)" % ", ".join(f for f in FORMATS if f not in LEAN_FORMATS))
     return 0
 
 
 def cmd_set_status(a):
     set_status(resolve_dir(a.dir), a.story, a.status, a.verified)
     if not a.no_build:
-        return cmd_build(argparse.Namespace(dir=a.dir, force=False, strict=False, only=None, no_graphviz=False))
+        return cmd_build(argparse.Namespace(dir=a.dir, force=False, strict=False, only=None, no_graphviz=False, profile="lean", formats=None, clean=False))
     return 0
 
 
@@ -3483,7 +3651,10 @@ def main(argv=None):
     b.add_argument("dir", nargs="?")
     b.add_argument("--force", action="store_true", help="build even if validation has errors")
     b.add_argument("--strict", action="store_true", help="refuse to build when there are warnings")
-    b.add_argument("--only", help="comma list: docs,mermaid,diagrams,html,pdf")
+    b.add_argument("--profile", choices=("lean", "full"), default="lean", help="output profile (default: lean)")
+    b.add_argument("--formats", help="comma list replacing profile, or +name/-name to modify it")
+    b.add_argument("--clean", action="store_true", help="remove known stale outputs inside generated/")
+    b.add_argument("--only", help="deprecated alias: docs,mermaid,diagrams,html,pdf")
     b.add_argument("--no-graphviz", action="store_true", help="use the built-in Pillow renderer even if Graphviz exists")
     v = sub.add_parser("validate", help="check the source for problems")
     v.add_argument("dir", nargs="?")
@@ -3502,6 +3673,10 @@ def main(argv=None):
     i = sub.add_parser("init", help="create docs/story-map/ from the template")
     i.add_argument("dir", nargs="?")
     i.add_argument("--no-vendor", action="store_true", help="do not copy storymap.py into the folder")
+    argv = list(sys.argv[1:] if argv is None else argv)
+    for pos in range(len(argv) - 2, -1, -1):
+        if argv[pos] == "--formats" and argv[pos + 1].startswith("-") and not argv[pos + 1].startswith("--"):
+            argv[pos:pos + 2] = ["--formats=" + argv[pos + 1]]
     a = ap.parse_args(argv)
     try:
         return {"build": cmd_build, "validate": cmd_validate, "status": cmd_status,

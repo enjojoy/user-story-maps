@@ -182,17 +182,16 @@ class TestBuild(Base):
     def test_build_and_persona_rename(self):
         self.edit("name: Busy gardener", "name: Garden enthusiast")
         self.edit("as_a: busy gardener", "as_a: garden enthusiast")
-        self.assertEqual(self.run_main("build", self.dir), 0)
-        md = open(os.path.join(self.dir, "generated", "user-stories.md"), encoding="utf-8").read()
+        self.assertEqual(self.run_main("build", self.dir, "--formats", "report"), 0)
+        md = open(os.path.join(self.dir, "generated", "REPORT.md"), encoding="utf-8").read()
         self.assertIn("As a garden enthusiast", md)
         self.assertNotIn("busy gardener", md)
-        self.assertIn("Topic", md.split("\n## ", 2)[1] + md)
-        self.assertIn("## Onboarding", md)
-        for f in ("user-stories.csv", "gaps-and-risks.md", "story-map.md", "story-map.html"):
-            self.assertTrue(os.path.getsize(os.path.join(self.dir, "generated", f)) > 100, f)
+        self.assertIn("## Topics", md)
+        self.assertIn("### Onboarding", md)
+        self.assertNotIn("```mermaid", md)
 
     def test_build_writes_architecture_outputs(self):
-        self.assertEqual(self.run_main("build", self.dir), 0)
+        self.assertEqual(self.run_main("build", self.dir, "--profile", "full"), 0)
         gen = os.path.join(self.dir, "generated")
         mmd = open(os.path.join(gen, "mermaid", "architecture.mmd"), encoding="utf-8").read()
         self.assertIn("subgraph", mmd)
@@ -203,6 +202,9 @@ class TestBuild(Base):
         self.assertIn("All topics", html)
         csv_head = open(os.path.join(gen, "user-stories.csv"), encoding="utf-8").readline()
         self.assertIn("Topic", csv_head)
+        for f in ("REPORT.md", "user-stories.md", "gaps-and-risks.md"):
+            self.assertTrue(os.path.getsize(os.path.join(gen, f)) > 100, f)
+        self.assertFalse(os.path.exists(os.path.join(gen, "README.md")))
         if sm.HAVE_PIL:
             self.assertTrue(os.path.getsize(os.path.join(gen, "architecture.png")) > 1000)
 
@@ -217,7 +219,7 @@ class TestBuild(Base):
     def test_build_refuses_on_error(self):
         self.edit("screens: [welcome]", "screens: [welcom]")
         self.assertEqual(self.run_main("build", self.dir), 1)
-        self.assertFalse(os.path.exists(os.path.join(self.dir, "generated", "user-stories.md")))
+        self.assertFalse(os.path.exists(os.path.join(self.dir, "generated", "REPORT.md")))
 
     def test_set_status_updates_and_rolls_back(self):
         self.assertEqual(self.run_main("set-status", "US-08", "built", "--dir", self.dir, "--no-build",
@@ -227,6 +229,206 @@ class TestBuild(Base):
         with self.assertRaises(sm.SourceError):
             sm.set_status(self.dir, "US-09", "built")  # no --verified -> would be invalid
         self.assertEqual(open(self.src, encoding="utf-8").read(), before)
+
+    def test_report_has_canonical_story_and_gap_rows(self):
+        import contextlib, io
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.run_main("build", self.dir, "--formats", "report"), 0)
+        m = sm.load_model(self.dir)
+        path = os.path.join(self.dir, "generated", "REPORT.md")
+        text = open(path, encoding="utf-8").read()
+        self.assertTrue(text.startswith("# Plant Waterer - story map report\n"))
+        self.assertIn("edit the source, not this file", text)
+        self.assertIn("## Topics", text)
+        self.assertIn("## Stories", text)
+        self.assertIn("## Gaps and risks", text)
+        self.assertNotIn("```mermaid", text)
+        self.assertIn("| ID | Story | Screens | Status | Evidence |", text)
+        self.assertNotIn("| Persona |", text)
+        for story in m["stories"]:
+            # Gaps legitimately refer to story IDs too; each canonical story row occurs once.
+            self.assertEqual(len(re.findall(r"^\| %s \|" % re.escape(story["id"]), text, re.M)), 1)
+            self.assertIn(sm.esc_md(sm.story_text(m, story)), text)
+        for gap in m["gaps"]:
+            self.assertEqual(len(re.findall(r"\*\*%s - " % re.escape(gap["id"]), text)), 1)
+        self.assertIn("**%d stories:**" % len(m["stories"]), text)
+        for status, count in sm.counts(m["stories"]).items():
+            self.assertIn("%s %d %s" % (sm.STATUS[status]["emoji"], count, status), text)
+        for target in re.findall(r"\]\(([^)]+)\)", text):
+            self.assertFalse(os.path.isabs(target), target)
+            self.assertTrue(os.path.exists(os.path.join(os.path.dirname(path), target)), target)
+        before = text
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.run_main("build", self.dir, "--formats", "report"), 0)
+        self.assertEqual(open(path, encoding="utf-8").read(), before)
+
+    def test_report_escapes_table_cells(self):
+        self.edit("notes: Only 4 species in the list so far.", 'notes: "Only | four\\nspecies in the list."')
+        self.edit("want: to understand what the app does before I add anything", 'want: "to understand | everything"')
+        import contextlib, io
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.run_main("build", self.dir, "--formats", "report"), 0)
+        text = open(os.path.join(self.dir, "generated", "REPORT.md"), encoding="utf-8").read()
+        self.assertIn("understand \\| everything", text)
+        self.assertIn("Only \\| four", text)
+        self.assertNotIn("four\nspecies", text)
+
+
+class TestBuildProfiles(unittest.TestCase):
+    """Small fixture covers format combinations without rendering the large example repeatedly."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.dir = os.path.join(self.tmp, "map")
+        os.makedirs(os.path.join(self.dir, "screens"))
+        with open(os.path.join(self.dir, "stories.yaml"), "w", encoding="utf-8") as f:
+            f.write(MINI_YAML.replace("flows:\n", "topics:\n  - id: general\n    title: General\nflows:\n", 1)
+                    .replace('    title: "Flow"\n', '    topic: general\n    title: "Flow"\n', 1))
+        self.gen = os.path.join(self.dir, "generated")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def build(self, *args):
+        import contextlib, io
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                result = sm.main(["build", self.dir, "--no-graphviz"] + list(args))
+            except SystemExit as ex:
+                result = ex.code
+        self.output = out.getvalue() + err.getvalue()
+        return result
+
+    @unittest.skipUnless(sm.HAVE_PIL, "Pillow not installed")
+    def test_lean_default_writes_exactly_four_outputs(self):
+        self.assertEqual(self.build(), 0, self.output)
+        self.assertEqual(set(os.listdir(self.gen)), {"REPORT.md", "architecture.png", "one-pager.png", "story-map.html"})
+        self.assertIn("opt-in:", self.output)
+        self.assertIn("--formats +name", self.output)
+        self.assertRegex(self.output, r"REPORT\.md.*(?:KB|MB)")
+        report = open(os.path.join(self.gen, "REPORT.md"), encoding="utf-8").read()
+        for name in ("architecture.png", "one-pager.png", "story-map.html"):
+            self.assertIn("](%s)" % name, report)
+        self.assertNotIn("](one-pager.pdf)", report)
+
+    @unittest.skipUnless(sm.HAVE_PIL, "Pillow not installed")
+    def test_full_profile_includes_legacy_and_opt_in_outputs(self):
+        self.assertEqual(self.build("--profile", "full"), 0, self.output)
+        expected = {"REPORT.md", "architecture.png", "one-pager.png", "one-pager.pdf", "story-map.html",
+                    "story-map.md", "user-stories.md", "user-stories.csv", "gaps-and-risks.md", "overview.png",
+                    "flow-map.png", "flows", "architecture", "mermaid", "dot"}
+        self.assertTrue(expected.issubset(set(os.listdir(self.gen))), set(os.listdir(self.gen)))
+        self.assertFalse(os.path.exists(os.path.join(self.gen, "README.md")))
+
+    @unittest.skipUnless(sm.HAVE_PIL, "Pillow not installed")
+    def test_formats_add_and_remove_profile_outputs(self):
+        self.assertEqual(self.build("--formats", "+csv,flows"), 0, self.output)
+        self.assertEqual(set(os.listdir(self.gen)), {"REPORT.md", "architecture.png", "one-pager.png", "story-map.html",
+                                                   "user-stories.csv", "flows"})
+        shutil.rmtree(self.gen)
+        self.assertEqual(self.build("--formats", "-onepager"), 0, self.output)
+        self.assertEqual(set(os.listdir(self.gen)), {"REPORT.md", "architecture.png", "story-map.html"})
+
+    def test_formats_replace_profile_and_mermaid_has_sources_only(self):
+        self.assertEqual(self.build("--profile", "full", "--formats", "csv,mermaid"), 0, self.output)
+        self.assertEqual(set(os.listdir(self.gen)), {"user-stories.csv", "mermaid"})
+        sources = os.listdir(os.path.join(self.gen, "mermaid"))
+        self.assertTrue(sources)
+        self.assertTrue(all(name.endswith(".mmd") for name in sources), sources)
+
+    def test_unknown_format_lists_valid_names_before_building(self):
+        self.assertEqual(self.build("--formats", "wat"), 2, self.output)
+        self.assertIn("wat", self.output)
+        for name in ("html", "arch", "onepager", "report", "legacy-md", "crops"):
+            self.assertIn(name, self.output)
+        self.assertFalse(os.path.exists(self.gen))
+
+    def test_only_alias_keeps_old_doc_mapping(self):
+        self.assertEqual(self.build("--only", "docs,mermaid"), 0, self.output)
+        self.assertIn("deprecat", self.output.lower())
+        self.assertEqual(set(os.listdir(self.gen)), {"REPORT.md", "user-stories.md", "user-stories.csv",
+                                                   "gaps-and-risks.md", "story-map.md", "mermaid"})
+
+    def test_clean_removes_stale_outputs_only_inside_generated(self):
+        os.makedirs(self.gen)
+        stale_files = ("story-map.md", "user-stories.md", "user-stories.csv", "gaps-and-risks.md", "README.md",
+                       "one-pager.pdf", "overview.png", "flow-map.png")
+        stale_dirs = ("flows", "architecture", "mermaid", "dot", "thumbs")
+        for name in stale_files:
+            with open(os.path.join(self.gen, name), "w") as f:
+                f.write("old")
+        for name in stale_dirs:
+            os.makedirs(os.path.join(self.gen, name))
+            with open(os.path.join(self.gen, name, "old.txt"), "w") as f:
+                f.write("old")
+        for name in (".gitkeep", "my-notes.txt"):
+            open(os.path.join(self.gen, name), "w").close()
+        sentinel = os.path.join(self.dir, "screens", "keep.txt")
+        with open(sentinel, "w") as f:
+            f.write("screenshot sentinel")
+        source = open(os.path.join(self.dir, "stories.yaml"), encoding="utf-8").read()
+        self.assertEqual(self.build("--formats", "report"), 0, self.output)
+        self.assertIn("stale (use --clean):", self.output)
+        self.assertTrue(all(os.path.exists(os.path.join(self.gen, name)) for name in stale_files + stale_dirs))
+        report = open(os.path.join(self.gen, "REPORT.md"), encoding="utf-8").read()
+        self.assertNotIn("](one-pager.pdf)", report)
+        self.assertNotIn("](overview.png)", report)
+        self.assertEqual(self.build("--formats", "report", "--clean"), 0, self.output)
+        self.assertEqual(set(os.listdir(self.gen)), {"REPORT.md", ".gitkeep", "my-notes.txt"})
+        self.assertEqual(open(sentinel).read(), "screenshot sentinel")
+        self.assertEqual(open(os.path.join(self.dir, "stories.yaml"), encoding="utf-8").read(), source)
+
+    def test_failed_build_does_not_clean(self):
+        os.makedirs(self.gen)
+        stale = os.path.join(self.gen, "user-stories.csv")
+        open(stale, "w").close()
+        source = os.path.join(self.dir, "stories.yaml")
+        text = open(source, encoding="utf-8").read()
+        with open(source, "w", encoding="utf-8") as f:
+            f.write(text.replace("screens: [s0]", "screens: [missing]"))
+        self.assertEqual(self.build("--formats", "report", "--clean"), 1, self.output)
+        self.assertTrue(os.path.exists(stale))
+
+    @unittest.skipUnless(sm.HAVE_PIL, "Pillow not installed")
+    def test_flow_map_only_cleans_temporary_flow_images(self):
+        self.assertEqual(self.build("--formats", "flow-map"), 0, self.output)
+        self.assertEqual(set(os.listdir(self.gen)), {"flow-map.png"})
+        self.assertGreater(os.path.getsize(os.path.join(self.gen, "flow-map.png")), 100)
+
+    def test_render_failure_does_not_clean_stale_outputs(self):
+        from unittest import mock
+        os.makedirs(self.gen)
+        stale = os.path.join(self.gen, "user-stories.csv")
+        with open(stale, "w") as f:
+            f.write("keep until a successful build")
+        with mock.patch.object(sm, "gen_html", side_effect=RuntimeError("render failed")):
+            with self.assertRaisesRegex(RuntimeError, "render failed"):
+                self.build("--formats", "html", "--clean")
+        with open(stale) as f:
+            self.assertEqual(f.read(), "keep until a successful build")
+
+    def test_report_only_output_paths_do_not_request_graphviz_cache(self):
+        from unittest import mock
+        m = sm.load_model(self.dir)
+        with mock.patch.object(sm, "HAVE_PIL", False), mock.patch.object(sm.shutil, "which", return_value="/usr/bin/dot"):
+            self.assertEqual(sm.output_paths(m, {"report"}), {"REPORT.md"})
+
+    def test_report_code_keeps_literal_path_characters(self):
+        code = sm.report_code("src/a&b/<Widget>|view")
+        self.assertIn("src/a&b/<Widget>\\|view", code)
+        self.assertNotIn("&amp;", code)
+        self.assertNotIn("&lt;", code)
+        self.assertTrue(code.startswith("`"))
+        self.assertTrue(code.endswith("`"))
+
+    def test_set_status_rebuild_uses_lean_defaults(self):
+        if not sm.HAVE_PIL:
+            self.skipTest("Pillow not installed")
+        import contextlib, io
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(sm.main(["set-status", "US-1", "partly", "--dir", self.dir]), 0)
+        self.assertEqual(set(os.listdir(self.gen)), {"REPORT.md", "architecture.png", "one-pager.png", "story-map.html"})
 
 
 # --------------------------------------------------------------------------- screenshots keep their aspect ratio
@@ -427,7 +629,7 @@ class TestAspect(unittest.TestCase):
         shutil.copytree(self.tmp, out, ignore=shutil.ignore_patterns("generated", "build"))
         import contextlib, io
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(sm.main(["build", out]), 0)
+            self.assertEqual(sm.main(["build", out, "--profile", "full"]), 0)
         sm._img_cache.clear()
         g = os.path.join(out, "generated")
         # one-pager: the contact sheet shows every screenshot completely inside its device frame
@@ -892,7 +1094,7 @@ class TestResolution(Base):
         sm._DEV_CACHE.clear()
 
     def test_build_renders_every_diagram_at_native_resolution(self):
-        self.assertEqual(sm.main(["build", self.dir]), 0)
+        self.assertEqual(sm.main(["build", self.dir, "--profile", "full"]), 0)
         rep = sm.resolution_report()
         gen = os.path.join(self.dir, "generated")
         self.assertIn("architecture", rep)
@@ -908,6 +1110,17 @@ class TestResolution(Base):
         self.assertGreaterEqual(arch.width * arch.height, 390 * 844 * len(sm.load_model(self.dir)["screens"]) // 2)   # canvas grew, not shrank
         self.assertTrue(os.path.isdir(os.path.join(gen, "architecture")))
         self.assertTrue(os.listdir(os.path.join(gen, "architecture")))
+
+    def test_default_lean_architecture_and_onepager_keep_native_resolution(self):
+        self.assertEqual(sm.main(["build", self.dir, "--no-graphviz"]), 0)
+        rep = sm.resolution_report()
+        for name in ("architecture", "one-pager"):
+            self.assertIn(name, rep)
+            self.assertGreaterEqual(rep[name], 0.99, "%s draws screenshots below native resolution" % name)
+        gen = os.path.join(self.dir, "generated")
+        for name in ("architecture.png", "one-pager.png"):
+            self.assertGreater(os.path.getsize(os.path.join(gen, name)), 1000)
+        self.assertEqual(set(os.listdir(gen)), {"REPORT.md", "architecture.png", "one-pager.png", "story-map.html"})
 
     def test_downscaled_render_is_reported_below_native(self):
         m = sm.load_model(self.dir)
