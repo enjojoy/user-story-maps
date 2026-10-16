@@ -866,6 +866,323 @@ class TestInit(unittest.TestCase):
         self.assertEqual(self.output.strip(), "1.2.0")
 
 
+class AgentsRepoCase(unittest.TestCase):
+    START = "<!-- user-story-maps:start -->"
+    END = "<!-- user-story-maps:end -->"
+
+    def setUp(self):
+        # Keep all test writes in this checkout and stop root discovery at our own repo.
+        self.tmp = tempfile.mkdtemp(prefix=".agents-tests-", dir=HERE)
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        os.mkdir(os.path.join(self.tmp, ".git"))
+        self.dir = os.path.join(self.tmp, "docs", "story-map")
+
+    def write(self, name, text):
+        path = os.path.join(self.tmp, name)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+        return path
+
+    def read(self, name):
+        with open(os.path.join(self.tmp, name), "rb") as f:
+            return f.read()
+
+    def run_main(self, *args):
+        import contextlib, io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            result = sm.main(list(args))
+        self.output = out.getvalue()
+        return result
+
+
+class TestInitAgents(AgentsRepoCase):
+    def test_appends_block_without_replacing_existing_text_or_missing_newline(self):
+        before = "# Existing instructions\nKeep these instructions."
+        self.write("AGENTS.md", before)
+        self.assertEqual(self.run_main("init", self.dir, "--agents"), 0)
+        text = self.read("AGENTS.md").decode("utf-8")
+        self.assertTrue(text.startswith(before + "\n\n" + self.START + "\n"))
+        self.assertEqual(text.count(self.START), 1)
+        self.assertEqual(text.count(self.END), 1)
+        self.assertIn("docs/story-map/stories.yaml", text)
+        self.assertIn("https://github.com/enjojoy/user-story-maps", text)
+        self.assertIn("Agents:", self.output)
+        self.assertIn("added", self.output)
+        self.assertIn("AGENTS.md", self.output)
+        self.assertIn("(docs/story-map)", self.output)
+
+    def test_second_init_is_byte_identical_and_preserves_the_source(self):
+        self.write("AGENTS.md", "# Repository\n")
+        self.assertEqual(self.run_main("init", self.dir, "--agents"), 0)
+        before = self.read("AGENTS.md")
+        source = os.path.join(self.dir, "stories.yaml")
+        with open(source, "a", encoding="utf-8") as f:
+            f.write("\n# Keep my source edits.\n")
+        with open(source, "rb") as f:
+            source_before = f.read()
+        self.assertEqual(self.run_main("init", self.dir, "--agents"), 0)
+        self.assertEqual(self.read("AGENTS.md"), before)
+        with open(source, "rb") as f:
+            self.assertEqual(f.read(), source_before)
+        self.assertIn("already up to date", self.output.lower())
+
+    def test_stale_managed_block_is_updated_without_changing_surrounding_text(self):
+        prefix, suffix = "# Keep before\n\n", "\n\n# Keep after\nNo final newline"
+        self.write("AGENTS.md", prefix + self.START + "\nStale text.\n" + self.END + suffix)
+        self.assertEqual(self.run_main("init", self.dir, "--agents"), 0)
+        text = self.read("AGENTS.md").decode("utf-8")
+        self.assertTrue(text.startswith(prefix + self.START + "\n"))
+        self.assertTrue(text.endswith(self.END + suffix))
+        self.assertNotIn("Stale text.", text)
+        self.assertEqual(text.count(self.START), 1)
+        self.assertIn("updated", self.output.lower())
+
+    def test_agents_takes_precedence_over_claude(self):
+        self.write("AGENTS.md", "# Agents\n")
+        claude = b"# Claude\nKeep me.\n"
+        self.write("CLAUDE.md", claude.decode("utf-8"))
+        self.assertEqual(self.run_main("init", self.dir, "--agents"), 0)
+        self.assertIn(self.START.encode("utf-8"), self.read("AGENTS.md"))
+        self.assertEqual(self.read("CLAUDE.md"), claude)
+
+    def test_claude_is_used_when_agents_is_missing(self):
+        self.write("CLAUDE.md", "# Claude\n")
+        self.assertEqual(self.run_main("init", self.dir, "--agents"), 0)
+        self.assertIn(self.START.encode("utf-8"), self.read("CLAUDE.md"))
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "AGENTS.md")))
+        self.assertIn("CLAUDE.md", self.output)
+
+    def test_bare_option_with_neither_file_prints_note_and_creates_neither(self):
+        self.assertEqual(self.run_main("init", self.dir, "--agents"), 0)
+        for name in ("AGENTS.md", "CLAUDE.md"):
+            self.assertFalse(os.path.exists(os.path.join(self.tmp, name)))
+        self.assertIn("no agents.md or claude.md found", self.output.lower())
+        self.assertIn("--agents AGENTS.md", self.output)
+        self.assertTrue(os.path.isfile(os.path.join(self.dir, "stories.yaml")))
+
+    def test_explicit_agents_file_is_created_in_the_repo_root(self):
+        self.assertEqual(self.run_main("init", self.dir, "--agents", "AGENTS.md"), 0)
+        self.assertIn(self.START.encode("utf-8"), self.read("AGENTS.md"))
+        self.assertFalse(os.path.exists(os.path.join(self.dir, "AGENTS.md")))
+
+    def test_explicit_custom_filename_is_created_and_existing_text_is_preserved(self):
+        name = "CODING.md"
+        self.assertEqual(self.run_main("init", self.dir, "--agents", name), 0)
+        before = self.read(name)
+        self.assertIn(self.START.encode("utf-8"), before)
+        self.write(name, "# Custom preface\n\n" + before.decode("utf-8"))
+        self.assertEqual(self.run_main("init", self.dir, "--agents", name), 0)
+        self.assertEqual(self.read(name), b"# Custom preface\n\n" + before)
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "AGENTS.md")))
+
+    def test_custom_map_path_is_relative_to_the_repo_root(self):
+        self.dir = os.path.join(self.tmp, "docs", "maps", "app")
+        self.assertEqual(self.run_main("init", self.dir, "--agents", "AGENTS.md"), 0)
+        text = self.read("AGENTS.md").decode("utf-8")
+        self.assertIn("docs/maps/app/stories.yaml", text)
+        self.assertIn("docs/maps/app/screens/", text)
+        self.assertIn("docs/maps/app/generated/", text)
+        self.assertIn("python3 <skill>/scripts/storymap.py validate docs/maps/app", text)
+        self.assertNotIn("docs/story-map", text)
+        self.assertNotIn(self.tmp, text)
+
+    def test_vendor_command_uses_custom_map_path_and_drops_skill_explanation(self):
+        self.dir = os.path.join(self.tmp, "docs", "maps", "app")
+        self.assertEqual(self.run_main("init", self.dir, "--vendor", "--agents", "AGENTS.md"), 0)
+        text = self.read("AGENTS.md").decode("utf-8")
+        self.assertIn("python3 docs/maps/app/storymap.py validate docs/maps/app", text)
+        self.assertIn("python3 docs/maps/app/storymap.py build docs/maps/app", text)
+        self.assertNotIn("<skill>", text)
+        self.assertNotIn("docs/story-map", text)
+        self.assertTrue(os.path.isfile(os.path.join(self.dir, "storymap.py")))
+
+    def test_quoted_vendor_paths_with_default_prefix_are_not_substituted_twice(self):
+        import shlex
+        relative = "docs/story-map/app map"
+        self.dir = os.path.join(self.tmp, *relative.split("/"))
+        self.assertEqual(self.run_main("init", self.dir, "--vendor", "--agents", "AGENTS.md"), 0)
+        text = self.read("AGENTS.md").decode("utf-8")
+        commands = re.findall(r"`(python3 [^`]+)`", text)
+        self.assertEqual([shlex.split(command) for command in commands],
+                         [["python3", relative + "/storymap.py", command, relative]
+                          for command in ("validate", "build")])
+        self.assertIn("`" + relative + "/stories.yaml`", text)
+        self.assertNotIn("app map/app map", text)
+
+    def test_crlf_file_preserves_surrounding_bytes_and_remains_idempotent(self):
+        prefix, suffix = "# Before\r\n\r\n", "\r\n\r\n# After, without final newline"
+        self.write("AGENTS.md", prefix + self.START + "\r\nOld block.\r\n" + self.END + suffix)
+        self.assertEqual(self.run_main("init", self.dir, "--agents"), 0)
+        updated = self.read("AGENTS.md")
+        self.assertTrue(updated.startswith((prefix + self.START + "\r\n").encode("utf-8")))
+        self.assertTrue(updated.endswith((self.END + suffix).encode("utf-8")))
+        self.assertNotIn(b"\n", updated.replace(b"\r\n", b""))
+        self.assertEqual(self.run_main("init", self.dir, "--agents"), 0)
+        self.assertEqual(self.read("AGENTS.md"), updated)
+        self.assertIn("already up to date", self.output.lower())
+
+    def test_map_outside_fallback_root_keeps_the_path_as_given(self):
+        import shlex
+        from unittest import mock
+        cwd = os.path.join(self.tmp, "working")
+        os.mkdir(cwd)
+        given = "../outside map"
+        isdir, isfile = os.path.isdir, os.path.isfile
+
+        def without_git(fn):
+            return lambda path: False if os.path.basename(os.fspath(path)) == ".git" else fn(path)
+
+        with mock.patch.object(os, "getcwd", return_value=cwd), \
+                mock.patch.object(os.path, "isdir", side_effect=without_git(isdir)), \
+                mock.patch.object(os.path, "isfile", side_effect=without_git(isfile)):
+            self.assertEqual(self.run_main("init", given, "--agents", "AGENTS.md"), 0)
+        text = self.read("working/AGENTS.md").decode("utf-8")
+        self.assertIn("`../outside map/stories.yaml`", text)
+        commands = re.findall(r"`(python3 [^`]+)`", text)
+        self.assertEqual([shlex.split(command)[-2:] for command in commands],
+                         [[command, given] for command in ("validate", "build")])
+        self.assertNotIn(self.tmp, text)
+
+    def test_legacy_story_map_mentions_are_not_changed(self):
+        for text in ("# Instructions\nKeep STORY-MAP updated.",
+                     "# Instructions\nUpdate STORIES.YAML before finishing.\n"):
+            with self.subTest(text=text):
+                self.write("AGENTS.md", text)
+                self.assertEqual(self.run_main("init", self.dir, "--agents"), 0)
+                self.assertEqual(self.read("AGENTS.md"), text.encode("utf-8"))
+                self.assertIn("already mentions the story map", self.output.lower())
+                self.assertIn("markers", self.output.lower())
+                self.assertIn("remove", self.output.lower())
+
+    def test_reminder_is_shown_only_without_agents_option(self):
+        self.assertEqual(self.run_main("init", self.dir), 0)
+        self.assertIn("IMPORTANT:", self.output)
+        self.assertIn("agents only keep the map current", self.output.lower())
+        self.assertIn("--agents", self.output)
+        self.assertIn("then run:  python3 ", self.output)
+        self.assertEqual(self.run_main("init", self.dir, "--agents", "AGENTS.md"), 0)
+        self.assertNotIn("IMPORTANT:", self.output)
+
+    def test_nearest_existing_ancestor_and_git_file_select_nested_repo(self):
+        self.write("AGENTS.md", "# Parent instructions\n")
+        self.write("nested/.git", "gitdir: ../.git/worktrees/nested\n")
+        self.dir = os.path.join(self.tmp, "nested", "docs", "maps", "app")
+        self.assertFalse(os.path.exists(os.path.dirname(self.dir)))
+        self.assertEqual(self.run_main("init", self.dir, "--agents", "AGENTS.md"), 0)
+        self.assertEqual(self.read("AGENTS.md"), b"# Parent instructions\n")
+        text = self.read("nested/AGENTS.md").decode("utf-8")
+        self.assertIn("docs/maps/app/stories.yaml", text)
+        self.assertNotIn("nested/docs/maps/app", text)
+
+    def test_init_help_describes_agents_option(self):
+        import contextlib, io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit) as ex:
+            sm.main(["init", "--help"])
+        self.assertEqual(ex.exception.code, 0)
+        self.assertIn("--agents", out.getvalue())
+        self.assertIn("AGENTS.md", out.getvalue())
+
+
+class TestValidateAgents(AgentsRepoCase):
+    def setUp(self):
+        super().setUp()
+        shutil.copytree(EXAMPLE, self.dir, ignore=shutil.ignore_patterns("generated", "tools"))
+        self.src = os.path.join(self.dir, "stories.yaml")
+        with open(self.src, encoding="utf-8") as f:
+            # Examples opt out because this checkout is not an application repo.
+            self.source = re.sub(r"(?m)^  agents_check:.*\n", "", f.read())
+        with open(self.src, "w", encoding="utf-8") as f:
+            f.write(self.source)
+
+    def issues(self):
+        return sm.validate(sm.load_model(self.dir))
+
+    def test_missing_instructions_warn_without_becoming_an_error(self):
+        model = sm.load_model(self.dir)
+        self.assertEqual(model["app"]["agents_check"], "")
+        warnings = [i for i in sm.validate(model) if i[1] == "AGENTS_MISSING"]
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0][0], "warn")
+        self.assertIn("init", warnings[0][2])
+        self.assertIn("--agents", warnings[0][2])
+        self.assertIn("templates/AGENTS-snippet.md", warnings[0][2])
+        self.assertNotIn("AGENTS_MISSING", codes(sm.validate(model), "error"))
+
+    def test_supported_instruction_files_and_case_insensitive_mentions_silence_warning(self):
+        cases = (("AGENTS.md", "<!-- USER-STORY-MAPS:start -->"),
+                 ("AGENTS.md", "Keep the STORY-MAP up to date."),
+                 ("AGENTS.md", "Update STORIES.YAML."),
+                 ("CLAUDE.md", "Keep the story-map updated."),
+                 (".cursor/rules/x.mdc", "Update Stories.Yaml."),
+                 (".cursor/rules/x.md", "Use the user-story-maps skill."))
+        for name, text in cases:
+            with self.subTest(name=name, text=text):
+                path = self.write(name, text)
+                self.assertNotIn("AGENTS_MISSING", codes(self.issues()))
+                os.unlink(path)
+
+    def test_instruction_files_without_any_mention_do_not_silence_warning(self):
+        for name in ("AGENTS.md", "CLAUDE.md", ".cursor/rules/x.mdc", ".cursor/rules/y.md"):
+            self.write(name, "Use Python 3.9 and run tests.\n")
+        self.assertIn("AGENTS_MISSING", codes(self.issues(), "warn"))
+
+    def test_only_files_in_the_closest_repo_root_are_checked(self):
+        self.write("AGENTS.md", "Update the story-map.\n")
+        os.mkdir(os.path.join(self.dir, ".git"))
+        self.assertIn("AGENTS_MISSING", codes(self.issues(), "warn"))
+        with open(os.path.join(self.dir, "AGENTS.md"), "w", encoding="utf-8") as f:
+            f.write("Update stories.yaml.\n")
+        self.assertNotIn("AGENTS_MISSING", codes(self.issues()))
+
+    def test_source_location_is_used_instead_of_model_root(self):
+        self.write("AGENTS.md", "Update the story-map.\n")
+        model = sm.load_model(self.dir)
+        model["root"] = HERE
+        self.assertNotIn("AGENTS_MISSING", codes(sm.validate(model)))
+
+    def test_instruction_symlink_above_the_repo_root_does_not_silence_warning(self):
+        outside = self.write("parent-instructions.md", "Update the story-map.\n")
+        os.mkdir(os.path.join(self.dir, ".git"))
+        os.symlink(outside, os.path.join(self.dir, "AGENTS.md"))
+        self.assertIn("AGENTS_MISSING", codes(self.issues(), "warn"))
+
+    def test_no_git_ancestor_skips_the_warning(self):
+        from unittest import mock
+        # The fixtures stay inside this checkout; hide only .git entries to model
+        # an ordinary directory without writing outside the repo.
+        exists, isdir, isfile = os.path.exists, os.path.isdir, os.path.isfile
+
+        def without_git(fn):
+            return lambda path: False if os.path.basename(os.fspath(path)) == ".git" else fn(path)
+
+        with mock.patch.object(os.path, "exists", side_effect=without_git(exists)), \
+                mock.patch.object(os.path, "isdir", side_effect=without_git(isdir)), \
+                mock.patch.object(os.path, "isfile", side_effect=without_git(isfile)):
+            self.assertNotIn("AGENTS_MISSING", codes(self.issues()))
+
+    def test_app_opt_out_values_are_loaded_and_silence_warning(self):
+        for value in ("off", "false", "no", "0"):
+            with self.subTest(value=value):
+                with open(self.src, "w", encoding="utf-8") as f:
+                    f.write(self.source.replace("app:\n", "app:\n  agents_check: " + value + "\n", 1))
+                model = sm.load_model(self.dir)
+                self.assertEqual(model["app"]["agents_check"], value)
+                self.assertNotIn("AGENTS_MISSING", codes(sm.validate(model)))
+
+    def test_warning_allows_validate_and_build_except_under_strict(self):
+        self.assertEqual(self.run_main("validate", self.dir), 0)
+        self.assertIn("AGENTS_MISSING", self.output)
+        self.assertEqual(self.run_main("validate", self.dir, "--strict"), 1)
+        self.assertIn("AGENTS_MISSING", self.output)
+        self.assertEqual(self.run_main("build", self.dir, "--formats", "report", "--strict"), 1)
+        self.assertFalse(os.path.exists(os.path.join(self.dir, "generated")))
+        self.assertEqual(self.run_main("build", self.dir, "--formats", "report"), 0)
+        self.assertTrue(os.path.isfile(os.path.join(self.dir, "generated", "REPORT.md")))
+
+
 # --------------------------------------------------------------------------- screenshots keep their aspect ratio
 SHAPES = {"phone": (600, 1300), "land": (1600, 1000), "square": (1000, 1000), "tablet": (1640, 2360),
           "web": (1440, 900), "tall": (500, 2400)}

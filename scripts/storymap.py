@@ -5,10 +5,10 @@ Usage (DIR defaults to this script's folder, docs/story-map, or the current fold
     python3 storymap.py build [DIR] [--profile lean|full] [--formats LIST] [--clean]
     python3 storymap.py build [DIR] --formats +csv,flows   # add optional outputs
     python3 storymap.py build [DIR] --formats -onepager   # remove a default output
-    python3 storymap.py validate [DIR] [--strict]         # warnings: long-field, repeated-text
+    python3 storymap.py validate [DIR] [--strict]         # warnings include AGENTS_MISSING
     python3 storymap.py status [DIR]
     python3 storymap.py set-status US-03 built --dir DIR --verified "app, 2026-10-15"
-    python3 storymap.py init [DIR] [--vendor]             # copy the generator only with --vendor
+    python3 storymap.py init [DIR] [--vendor] [--agents [FILE]]  # install repo instructions too
 
 Lean defaults: generated/REPORT.md, architecture.png, one-pager.png, story-map.html.
 Full includes every optional format; --formats replaces a profile, or +name/-name modifies it.
@@ -224,6 +224,44 @@ def find_source(d):
     raise SourceError("no stories.yaml found in %s (run `init` first?)" % d)
 
 
+def repo_root(path, fallback=True):
+    """Nearest existing ancestor with a .git directory/file; optionally fall back to cwd."""
+    path = os.path.abspath(path)
+    while not os.path.isdir(path):
+        parent = os.path.dirname(path)
+        if parent == path:
+            break
+        path = parent
+    while True:
+        git = os.path.join(path, ".git")
+        if os.path.isdir(git) or os.path.isfile(git):
+            return path
+        parent = os.path.dirname(path)
+        if parent == path:
+            return os.getcwd() if fallback else None
+        path = parent
+
+
+def repo_mentions_story_map(root):
+    """Check only the repository's instruction files and direct Cursor rules."""
+    paths = [os.path.join(root, name) for name in ("AGENTS.md", "CLAUDE.md")]
+    rules = os.path.join(root, ".cursor", "rules")
+    if os.path.isdir(rules):
+        paths += [os.path.join(rules, name) for name in sorted(os.listdir(rules))
+                  if name.endswith((".mdc", ".md"))]
+    for path in paths:
+        try:
+            # A linked instruction outside the repo must not extend this check above it.
+            if os.path.commonpath((os.path.realpath(root), os.path.realpath(path))) != os.path.realpath(root):
+                continue
+            with open(path, encoding="utf-8") as f:
+                if re.search(r"user-story-maps|story-map|stories\.yaml", f.read(), re.I):
+                    return True
+        except (OSError, UnicodeError, ValueError):
+            continue
+    return False
+
+
 def _s(d, k, default=""):
     v = d.get(k, default) if isinstance(d, dict) else default
     return str(v).strip() if v is not None else default
@@ -259,7 +297,8 @@ def load_model(src_dir):
     m = dict(root=os.path.abspath(src_dir), source=path, raw=raw)
     m["app"] = dict(name=_s(app, "name", "My app"), platform=_s(app, "platform", "ios").lower(),
                     version=_s(app, "version"), checked=_s(app, "checked"), summary=_s(app, "summary"),
-                    disclaimer=_s(app, "disclaimer"), device=_s(app, "device").lower())
+                    disclaimer=_s(app, "disclaimer"), device=_s(app, "device").lower(),
+                    agents_check=_s(app, "agents_check").lower())
     m["personas"] = [dict(id=_s(p, "id"), name=_s(p, "name") or _s(p, "id"),
                           as_a=_s(p, "as_a") or (_s(p, "name") or _s(p, "id")).lower(),
                           description=_s(p, "description")) for p in _dicts(raw.get("personas"), "personas")]
@@ -385,10 +424,16 @@ def counts(items, key="status"):
 
 # --------------------------------------------------------------------------- validation
 def validate(m):
-    """Return (level, code, message) issues, including long-field/repeated-text warnings."""
+    """Return (level, code, message) issues, including AGENTS_MISSING and text warnings."""
     out = []
     E = lambda c, msg: out.append(("error", c, msg))
     W = lambda c, msg: out.append(("warn", c, msg))
+    if m["app"].get("agents_check", "").lower() not in ("off", "false", "no", "0"):
+        root = repo_root(os.path.dirname(m["source"]), fallback=False)
+        if root and not repo_mentions_story_map(root):
+            directory = os.path.relpath(os.path.dirname(os.path.abspath(m["source"])), root).replace(os.sep, "/")
+            W("AGENTS_MISSING", "no repo instruction file mentions the story map; run `storymap.py init %s --agents` "
+              "or paste templates/AGENTS-snippet.md into AGENTS.md" % shlex.quote(directory))
     for kind, items in (("persona", m["personas"]), ("topic", m["topics"]), ("flow", m["flows"]), ("screen", m["screens"]),
                         ("story", m["stories"]), ("gap", m["gaps"])):
         seen = collections.Counter(i["id"] for i in items)
@@ -3744,32 +3789,108 @@ def cmd_set_status(a):
     return 0
 
 
+AGENTS_START = "<!-- user-story-maps:start -->"
+AGENTS_END = "<!-- user-story-maps:end -->"
+
+
+def agents_snippet(template_dir, rel_dir, vendored=False):
+    with open(os.path.join(template_dir, "AGENTS-snippet.md"), encoding="utf-8") as f:
+        snippet = f.read().strip()
+    snippet = snippet.replace("docs/story-map", rel_dir)
+    for command in ("validate", "build"):
+        snippet = snippet.replace(command + " " + rel_dir, command + " " + shlex.quote(rel_dir))
+    if vendored:
+        snippet = snippet.replace("python3 <skill>/scripts/storymap.py",
+                                  "python3 " + shlex.quote(rel_dir.rstrip("/") + "/storymap.py"))
+        snippet = "\n".join(line for line in snippet.splitlines() if not line.startswith("`<skill>` ="))
+    return snippet
+
+
+def apply_agents(root, agents, snippet, rel_dir):
+    if agents == "auto":
+        agents = next((name for name in ("AGENTS.md", "CLAUDE.md")
+                       if os.path.isfile(os.path.join(root, name))), None)
+        if agents is None:
+            print("Agents: skipped; no AGENTS.md or CLAUDE.md found; re-run with `--agents AGENTS.md` to create it.")
+            return
+    path = os.path.abspath(os.path.join(root, agents))
+    label = os.path.relpath(path, root).replace(os.sep, "/")
+    try:
+        if os.path.exists(path):
+            with open(path, encoding="utf-8", newline="") as f:
+                old = f.read()
+        else:
+            old = ""
+        newline = "\r\n" if "\r\n" in old else "\n"
+        snippet = snippet.replace("\n", newline)
+        start = old.find(AGENTS_START)
+        end = old.find(AGENTS_END, start + len(AGENTS_START)) if start >= 0 else -1
+        if start >= 0 and end >= 0:
+            end += len(AGENTS_END)
+            if old[start:end] == snippet:
+                print("Agents: already up to date in %s (%s)" % (label, rel_dir))
+                return
+            text = old[:start] + snippet + old[end:]
+            action = "updated the story-map block in"
+        elif AGENTS_START in old or AGENTS_END in old:
+            print("Agents: skipped %s; incomplete story-map markers; add both markers manually or remove the old block." % label)
+            return
+        elif re.search(r"story-map|stories\.yaml", old, re.I):
+            print("Agents: skipped %s; it already mentions the story map; add the markers manually "
+                  "or remove the old block to switch to the managed block." % label)
+            return
+        else:
+            separator = "" if not old or old.endswith(newline * 2) else (newline if old.endswith(("\n", "\r")) else newline * 2)
+            text = old + separator + snippet + newline
+            action = "added the story-map block to"
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+    except (OSError, UnicodeError) as ex:
+        raise SourceError("cannot update agents file %s: %s" % (label, ex))
+    print("Agents: %s %s (%s)" % (action, label, rel_dir))
+
+
 def cmd_init(a):
-    d = os.path.abspath(a.dir or os.path.join("docs", "story-map"))
+    given_dir = a.dir or os.path.join("docs", "story-map")
+    d = os.path.abspath(given_dir)
+    root = repo_root(d)
+    agents = getattr(a, "agents", None)
     here = os.path.dirname(os.path.abspath(__file__))
     tdir = next((p for p in (os.path.join(here, "..", "templates"), os.path.join(here, "templates")) if os.path.isdir(p)), None)
     if not tdir:
         raise SourceError("templates/ folder not found next to this script")
-    if any(os.path.isfile(os.path.join(d, n)) for n in SOURCE_NAMES):
+    existing = any(os.path.isfile(os.path.join(d, n)) for n in SOURCE_NAMES)
+    if existing and agents is None:
         raise SourceError("%s already has a stories.yaml - not overwriting" % d)
-    os.makedirs(os.path.join(d, "screens"), exist_ok=True)
-    os.makedirs(os.path.join(d, "generated"), exist_ok=True)
-    for n in ("stories.yaml", "README.md"):
-        shutil.copy(os.path.join(tdir, n), os.path.join(d, n))
-    for sub in ("screens", "generated"):
-        with open(os.path.join(d, sub, ".gitkeep"), "w"):
-            pass
-    ensure_gitignore(d, (".cache/", "frames.json", "frames/", ".demo-session.json", "*.storage-state.json", ".env", ".env.*"))
+    if not existing:
+        os.makedirs(os.path.join(d, "screens"), exist_ok=True)
+        os.makedirs(os.path.join(d, "generated"), exist_ok=True)
+        for n in ("stories.yaml", "README.md"):
+            shutil.copy(os.path.join(tdir, n), os.path.join(d, n))
+        for sub in ("screens", "generated"):
+            with open(os.path.join(d, sub, ".gitkeep"), "w"):
+                pass
+        ensure_gitignore(d, (".cache/", "frames.json", "frames/", ".demo-session.json", "*.storage-state.json", ".env", ".env.*"))
     if getattr(a, "vendor", False):
         shutil.copy(os.path.abspath(__file__), os.path.join(d, "storymap.py"))
-    print("Created %s" % d)
+    print("%s %s" % ("Using existing" if existing else "Created", d))
     print("  stories.yaml   <- the ONE file you edit")
     print("  screens/       <- put real screenshots here (see the capture guide in SKILL.md)")
     print("  generated/     <- written by the build; never edit")
     if getattr(a, "vendor", False):
         print("  storymap.py    <- vendored copy of the generator")
     print("Next: edit stories.yaml, then run:  python3 %s build %s" % (shlex.quote(os.path.abspath(__file__)), shlex.quote(d)))
-    print("Also add the block from templates/AGENTS-snippet.md to the repo's AGENTS.md.")
+    if agents is not None:
+        rel_dir = os.path.relpath(d, root).replace(os.sep, "/")
+        if rel_dir == ".." or rel_dir.startswith("../"):
+            rel_dir = given_dir.replace(os.sep, "/")
+        apply_agents(root, agents, agents_snippet(tdir, rel_dir, getattr(a, "vendor", False)), rel_dir)
+    else:
+        print("\nIMPORTANT: agents only keep the map current if the repo tells them to.")
+        print("Run: python3 %s init %s --agents   (appends the block to AGENTS.md or CLAUDE.md)" %
+              (shlex.quote(os.path.abspath(__file__)), shlex.quote(d)))
+        print("Use --agents AGENTS.md to create the instruction file if needed.")
     return 0
 
 
@@ -3788,7 +3909,7 @@ def main(argv=None):
     b.add_argument("--no-graphviz", action="store_true", help="use the built-in Pillow renderer even if Graphviz exists")
     b.add_argument("--embed-fonts", action="store_true", help="embed WOFF2 subsets of theme fonts (needs fontTools and brotli)")
     v = sub.add_parser("validate", help="check the source for problems",
-                       description="Check the source, including long-field and repeated-text warnings (use --strict to fail on warnings).")
+                       description="Check the source, including AGENTS_MISSING, long-field and repeated-text warnings (use --strict to fail on warnings).")
     v.add_argument("dir", nargs="?")
     v.add_argument("--strict", action="store_true", help="exit 1 on warnings too")
     st = sub.add_parser("status", help="print counts per status / flow / persona")
@@ -3802,9 +3923,12 @@ def main(argv=None):
     tf = sub.add_parser("theme-from", help="scan an app's source for design tokens (colours, fonts) and print a draft theme: block")
     tf.add_argument("path", help="app source folder (read-only scan)")
     tf.add_argument("--limit", type=int, default=4000, help="max files to scan")
-    i = sub.add_parser("init", help="create docs/story-map/ from the template")
+    i = sub.add_parser("init", help="create a story map; --agents installs or updates repo instructions",
+                       description="Create a story map from the template, or update instructions for an existing map with --agents.")
     i.add_argument("dir", nargs="?")
     i.add_argument("--vendor", action="store_true", help="copy storymap.py into the new folder")
+    i.add_argument("--agents", nargs="?", const="auto", metavar="FILE",
+                   help="update repo AGENTS.md (or CLAUDE.md); give FILE to create it, relative to the repo root")
     i.add_argument("--no-vendor", action="store_true", help=argparse.SUPPRESS)
     argv = list(sys.argv[1:] if argv is None else argv)
     for pos in range(len(argv) - 2, -1, -1):

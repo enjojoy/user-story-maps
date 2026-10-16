@@ -29,5 +29,5 @@ Need CSV (`csv`), Mermaid for GitHub diagrams (`mermaid`), or the old three Mark
 
 ## Validator
 - Errors: missing/duplicate id; flow/screen without a known topic; unknown screen/persona/flow/topic/story/device refs; bad edge syntax, status, severity or `theme:` colour; no `want`/`story`; `built` without `verified:`; absolute or `..` image path.
-- Warnings: no `topics:` (→ "General"), unused topic, bad `theme.device.style` (→ `black`), missing screenshot without `not_captured`, unused screen, screen in no flow, story without screens (unless `missing`), `built` without `where:`, empty flow, persona without stories.
+- Warnings: no `topics:` (→ "General"), unused topic, bad `theme.device.style` (→ `black`), missing screenshot without `not_captured`, unused screen, screen in no flow, story without screens (unless `missing`), `built` without `where:`, empty flow, persona without stories, `AGENTS_MISSING` (no instruction file in the repo mentions the story map; run `init <dir> --agents` or paste `templates/AGENTS-snippet.md`; silence with `app.agents_check: off`).
 - Text warnings: `long-field`: story want/so_that/story > 160 chars; story/screen notes, where, verified > 200; gap title > 100, detail > 400, where > 120. `repeated-text`: the same text ≥ 40 chars in ≥ 3 items of one field. Fix by shortening or saying it once.

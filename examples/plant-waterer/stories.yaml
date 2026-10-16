@@ -3,6 +3,7 @@
 # Format: simple YAML. One value per line, 2-space indents, "- " starts a list item.
 
 app:
+  agents_check: off
   name: Plant Waterer
   platform: ios                 # ios | android | web  (also picks the device frame)
   version: "demo build 1.0"     # the commit / build / release this map was checked against

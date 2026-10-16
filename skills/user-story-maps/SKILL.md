@@ -5,24 +5,27 @@ description: "Create, update or audit an app's user stories, story map, screen/f
 
 # User story maps
 
-One `stories.yaml` → `REPORT.md`, HTML viewer, architecture-by-topic image and one-pager with real screenshots in device frames, styled like the app. Free tools, nothing uploaded.
+One `stories.yaml` → `REPORT.md`, HTML viewer, topic architecture and one-pager with real screenshots in device frames. Free tools, nothing uploaded.
 
 ## When
 
 Use: app docs, "what is built" audit, gap planning, after any user-visible change. Skip: backlog tracking, pixel-perfect design.
 
+**Do this first:** run `init docs/story-map --agents`. It adds a block to the repo's `AGENTS.md` (or `CLAUDE.md`) that tells coding agents to keep the map updated; without it they will not. No such file yet? Use `--agents AGENTS.md` to create one. `validate` warns when none mentions the map.
+
 ## Workflow
 
-1. `python3 <skill>/scripts/storymap.py init docs/story-map`. Fill `app` (note commit read), 2–4 `personas`.
+1. `python3 <skill>/scripts/storymap.py init docs/story-map --agents`. Fill `app` (note commit read), 2–4 `personas`.
 2. Define 4–7 `topics`; every flow gets `topic:`.
 3. Inventory screens from code (router, components, routes) incl. empty/error/paywall/permission states; `edges:` per flow.
 4. Capture screenshots → `image:`; impossible → `not_captured: <why>`.
 5. One story per user goal, start `unverified`; promote only what you checked.
 6. `theme-from <app-source>` → `theme:`. Gaps, dead ends, risks → `gaps:`.
-7. `validate [--strict]` → fix → `build` → open `generated/story-map.html`, check `architecture.png` (cross-topic arrows match real navigation; topic with no in/out arrow = missing edge). Tell the user what is `unverified` and why.
-8. Paste `templates/AGENTS-snippet.md` into `AGENTS.md`/`CLAUDE.md`; consider `validate --strict` in CI.
+7. `validate [--strict]` → fix → `build` → open `generated/story-map.html` and `architecture.png`. Check cross-topic arrows against real navigation; isolated topics need edges. Report what is `unverified` and why.
 
-Later edits: `validate && build`. New story/screen/flow/topic = append (unique id; a screen also needs a flow edge and ≥1 story). New screenshot = overwrite the file. Renamed id = find/replace; `validate` lists misses.
+Consider `validate --strict` in CI.
+
+After edits: `validate && build`. Append new items with unique ids; screens need a flow edge and ≥1 story. Overwrite screenshots. Renamed id = find/replace; `validate` lists misses.
 
 ## Commands
 
@@ -30,7 +33,7 @@ Later edits: `validate && build`. New story/screen/flow/topic = append (unique i
 
 | Command | Does |
 |---|---|
-| `init [DIR] [--vendor]` | Create folder + `.gitignore`; `--vendor` copies `storymap.py` in |
+| `init [DIR] [--vendor] [--agents [FILE]]` | Create folder + `.gitignore`; vendor script; update AGENTS.md/CLAUDE.md (`FILE` creates it) |
 | `validate [DIR] [--strict]` | Exit 1 on errors (`--strict`: warnings too) |
 | `build [DIR] [--profile lean\|full] [--formats LIST] [--clean] [--embed-fonts] [--no-graphviz] [--strict] [--force]` | Validate, then write `generated/` |
 | `status [DIR]` | Counts per status / flow / persona |
@@ -41,7 +44,7 @@ Later edits: `validate && build`. New story/screen/flow/topic = append (unique i
 
 | Format | File | Default |
 |---|---|---|
-| `report` | `REPORT.md`: status counts, topics, stories per topic, gaps by severity, image links; each fact once | yes |
+| `report` | `REPORT.md`: counts, topics, stories, gaps, image links; each fact once | yes |
 | `html` | `story-map.html`: one file, filters, search, click for details, system fonts, screens ≤ 480 px | yes |
 | `arch` | `architecture.png`: topic swimlanes | yes |
 | `onepager` | `one-pager.png`: status, topics, top gaps, all screens | yes |
@@ -60,7 +63,7 @@ One value per line, 2-space indent, `- ` items, `#` comments, `[a, b]` lists; qu
 
 | Section | Fields |
 |---|---|
-| `app` | `name`, `platform` (ios/android/web), `version`, `checked`, `summary`, `disclaimer`, `device` |
+| `app` | `name`, `platform` (ios/android/web), `version`, `checked`, `summary`, `disclaimer`, `device`, `agents_check` |
 | `theme` | optional → [`references/theme.md`](references/theme.md) |
 | `topics[]` | `id`, `title`, `description`, `color` (override), `order` |
 | `personas[]` | `id`, `name`, `as_a`, `description` |
@@ -79,7 +82,7 @@ One value per line, 2-space indent, `- ` items, `#` comments, `[a, b]` lists; qu
 | `unverified` | Not confirmed (default) |
 | `missing` | Not built / planned |
 
-- `validate` errors: missing/duplicate id, unknown refs or topic, bad edge/status/severity/colour, no `want`/`story`, `built` without `verified:`, absolute or `..` image path. Warnings: unused/orphan items, missing screenshot without `not_captured`, `built` without `where:`, `long-field`, `repeated-text` (same ≥ 40-char text in ≥ 3 items). Full list: [`references/outputs.md`](references/outputs.md).
+- `validate` errors: missing/duplicate id, unknown refs/topic, bad edge/status/severity/colour, no `want`/`story`, `built` without `verified:`, absolute or `..` image path. Warnings: unused/orphan items, missing screenshot without `not_captured`, `built` without `where:`, `long-field`, `repeated-text` (same ≥ 40-char text in ≥ 3 items), `AGENTS_MISSING` (no repo instruction file mentions the map; silence with `app.agents_check: off`). Full list: [`references/outputs.md`](references/outputs.md).
 
 ## Rules
 
@@ -99,7 +102,7 @@ Details: [`references/looks.md`](references/looks.md), [`theme.md`](references/t
 - **No white cards:** device, title, status badge sit on the lane/page background.
 - **Topic swimlanes:** `architecture.png` = one coloured lane per topic in `order`, screens in an aligned grid, thick labelled cross-topic arrows.
 - **Tree layout:** 2+ outgoing edges → trunk, orthogonal bus, aligned children centred on the parent.
-- **Resolution:** image outputs draw every screenshot ≥ native pixels (zoom reads all text); never downscaled, the canvas grows. Only the HTML embeds reduced copies.
+- **Resolution:** screenshots ≥ native pixels (zoom reads all text); never downscaled, the canvas grows. Only HTML embeds reduced copies.
 
 ## Capture
 

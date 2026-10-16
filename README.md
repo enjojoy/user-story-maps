@@ -10,11 +10,13 @@ Keep your app's topics, personas, flows, screens and user stories in one `storie
 ```bash
 python3 scripts/storymap.py build examples/plant-waterer           # fictional quickstart
 python3 scripts/storymap.py build examples/wikipedia-ios           # real-app example (dark)
-python3 scripts/storymap.py init docs/story-map                    # your app: stories.yaml, screens/, .gitignore
+python3 scripts/storymap.py init docs/story-map --agents           # your app: stories.yaml, screens/, .gitignore
 python3 scripts/storymap.py theme-from path/to/app/source          # optional: draft theme: from the app's tokens
 python3 scripts/storymap.py validate docs/story-map && python3 scripts/storymap.py build docs/story-map
 ```
-Add [`templates/AGENTS-snippet.md`](templates/AGENTS-snippet.md) to your `AGENTS.md` so coding agents keep the map current. Agents should read [`skills/user-story-maps/SKILL.md`](skills/user-story-maps/SKILL.md).
+Agents only keep the map current if `AGENTS.md` (or `CLAUDE.md`) tells them to. The block has markers, so running the command again updates it and never overwrites your text.
+
+If neither file exists, use `--agents AGENTS.md` to create one. Agents should read [`skills/user-story-maps/SKILL.md`](skills/user-story-maps/SKILL.md).
 
 ## Output
 The default `lean` profile writes these to `generated/`:

@@ -19,3 +19,4 @@ $SM set-status --dir docs/story-map US-03 built --verified "app, 2026-10-15"   #
 Rules: never mark a story `built` unless you verified it in code or on a running app (otherwise `unverified`);
 keep fields short and say things once; screenshots are shown inside device frames drawn by the generator (never commit third-party frame images); screenshots come from a demo account only - no real emails, names, tokens or credentials.
 Full guide: the `user-story-maps` skill (`SKILL.md`).
+Run `init docs/story-map --agents` to add the map-update instructions to `AGENTS.md` or `CLAUDE.md`; pass `--agents AGENTS.md` to create the file.

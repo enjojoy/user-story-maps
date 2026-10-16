@@ -3,6 +3,7 @@
 # Format: simple YAML. One value per line, 2-space indents, "- " starts a list item.
 
 app:
+  agents_check: off
   name: Wikipedia (iOS)
   platform: ios
   version: "main @ ca8aaeb"
