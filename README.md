@@ -1,4 +1,4 @@
-# user-story-maps
+# User Story creator skill for your mobile (and not only) apps
 
 ## What it does
 
