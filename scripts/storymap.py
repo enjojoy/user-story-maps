@@ -9,6 +9,8 @@ Usage (run from anywhere; DIR defaults to the folder this script lives in, or do
     python3 storymap.py set-status [DIR] US-03 built --verified "app, 2026-10-15"
     python3 storymap.py init     [DIR]   # create DIR from the template (stories.yaml, screens/, generated/)
 
+Warnings include long-field and repeated-text; --strict fails on warnings too.
+
 Only the Python 3 standard library is required. Optional, with graceful fallback:
   Pillow    -> thumbnails, PNG diagrams, PDF one-pager, HTML images   (steps are skipped without it)
   PyYAML    -> full YAML support (otherwise a small built-in parser handles the documented subset)
@@ -288,7 +290,8 @@ def load_model(src_dir):
                                    dashed=label.startswith("(")))
     m["screens"] = [dict(id=_s(x, "id"), title=_s(x, "title") or _s(x, "id"), flow=_s(x, "flow"),
                          image=_s(x, "image"), not_captured=_s(x, "not_captured"), notes=_s(x, "notes"),
-                         where=_s(x, "where"), status_override=_s(x, "status").lower(), topic=_s(x, "topic"),
+                         where=_s(x, "where"), verified=_s(x, "verified"),
+                         status_override=_s(x, "status").lower(), topic=_s(x, "topic"),
                          device=_s(x, "device").lower())
                     for x in _dicts(raw.get("screens"), "screens")]
     m["stories"] = [dict(id=_s(x, "id"), persona=_s(x, "persona"), want=_s(x, "want"), so_that=_s(x, "so_that"),
@@ -384,7 +387,7 @@ def counts(items, key="status"):
 
 # --------------------------------------------------------------------------- validation
 def validate(m):
-    """Return a list of (level, code, message); level is 'error' or 'warn'."""
+    """Return (level, code, message) issues, including long-field/repeated-text warnings."""
     out = []
     E = lambda c, msg: out.append(("error", c, msg))
     W = lambda c, msg: out.append(("warn", c, msg))
@@ -489,6 +492,33 @@ def validate(m):
         for uid in g["stories"]:
             if uid not in m["U"]:
                 E("UNKNOWN_STORY", "gap %s refers to unknown story '%s'" % (g["id"], uid))
+    field_limits = (
+        ("story", m["stories"], (("want", 160), ("so_that", 160), ("story", 160),
+                                 ("notes", 200), ("where", 200), ("verified", 200))),
+        ("screen", m["screens"], (("notes", 200), ("where", 200), ("verified", 200))),
+        ("gap", m["gaps"], (("title", 100), ("detail", 400), ("where", 120))),
+    )
+    for kind, items, limits in field_limits:
+        for item in items:
+            for field, limit in limits:
+                size = len(item.get(field, ""))
+                if size > limit:
+                    W("long-field", "%s %s: `%s` is %d characters (limit %d); "
+                      "shorten or move detail to the code/docs" % (kind, item["id"] or "(no id)", field, size, limit))
+    for kind, items, fields in (("story", m["stories"], ("verified", "where", "notes")),
+                                ("screen", m["screens"], ("where", "notes")),
+                                ("gap", m["gaps"], ("where",))):
+        for field in fields:
+            repeated = collections.OrderedDict()
+            for item in items:
+                value = item.get(field, "").strip()
+                if len(value) >= 40:
+                    repeated.setdefault(value.casefold(), []).append(item["id"] or "(no id)")
+            for ids in repeated.values():
+                if len(ids) >= 3:
+                    first_ids = ", ".join(ids[:5]) + (", ..." if len(ids) > 5 else "")
+                    W("repeated-text", "%s `%s`: the same text appears in %d items (%s); "
+                      "say it once (e.g. in app.summary or a gap) or shorten it" % (kind, field, len(ids), first_ids))
     return out
 
 
@@ -3725,7 +3755,8 @@ def main(argv=None):
     b.add_argument("--only", help="deprecated alias: docs,mermaid,diagrams,html,pdf")
     b.add_argument("--no-graphviz", action="store_true", help="use the built-in Pillow renderer even if Graphviz exists")
     b.add_argument("--embed-fonts", action="store_true", help="embed WOFF2 subsets of theme fonts (needs fontTools and brotli)")
-    v = sub.add_parser("validate", help="check the source for problems")
+    v = sub.add_parser("validate", help="check the source for problems",
+                       description="Check the source, including long-field and repeated-text warnings (use --strict to fail on warnings).")
     v.add_argument("dir", nargs="?")
     v.add_argument("--strict", action="store_true", help="exit 1 on warnings too")
     st = sub.add_parser("status", help="print counts per status / flow / persona")

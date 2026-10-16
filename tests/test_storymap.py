@@ -90,6 +90,123 @@ class TestValidate(Base):
         self.edit('"welcome -> plant-list: Tap Skip for now"', '"welcome -> nowhere: Tap Skip for now"')
         self.assertIn("UNKNOWN_SCREEN", codes(self.issues(), "error"))
 
+    def test_long_fields_warn_only_above_each_limit(self):
+        m = sm.load_model(self.dir)
+        families = (("stories", (("want", 160), ("so_that", 160), ("story", 160),
+                                  ("notes", 200), ("where", 200), ("verified", 200))),
+                    ("screens", (("notes", 200), ("where", 200), ("verified", 200))),
+                    ("gaps", (("title", 100), ("detail", 400), ("where", 120))))
+        for family, fields in families:
+            item = m[family][0]
+            for field, limit in fields:
+                with self.subTest(family=family, field=field):
+                    before = item[field]
+                    item[field] = "x" * limit
+                    self.assertNotIn("long-field", codes(sm.validate(m)))
+                    item[field] += "x"
+                    issues = sm.validate(m)
+                    warnings = [i for i in issues if i[1] == "long-field"]
+                    self.assertEqual(len(warnings), 1)
+                    level, code, message = warnings[0]
+                    self.assertEqual(level, "warn")
+                    self.assertIn(item["id"], message)
+                    self.assertIn("`%s`" % field, message)
+                    self.assertIn("%d characters" % (limit + 1), message)
+                    self.assertIn("limit %d" % limit, message)
+                    self.assertIn("shorten or move detail to the code/docs", message)
+                    self.assertNotIn("long-field", codes(issues, "error"))
+                    item[field] = before
+
+    def test_screen_verified_is_loaded_and_checked(self):
+        value = "v" * 201
+        self.edit("  - id: welcome\n", "  - id: welcome\n    verified: " + value + "\n")
+        m = sm.load_model(self.dir)
+        self.assertEqual(m["S"]["welcome"]["verified"], value)
+        warnings = [msg for level, code, msg in sm.validate(m) if code == "long-field"]
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("screen welcome: `verified`", warnings[0])
+
+    def test_repeated_text_warns_once_per_family_with_trimmed_case_matching(self):
+        families = (("stories", "verified"), ("stories", "where"), ("stories", "notes"),
+                    ("screens", "where"), ("screens", "notes"), ("gaps", "where"))
+        for family, field in families:
+            with self.subTest(family=family, field=field):
+                m = sm.load_model(self.dir)
+                items = m[family][:3]
+                text = "Shared evidence " + "x" * 24  # exactly 40 characters
+                items[0][field], items[1][field] = text, "  " + text.upper() + "  "
+                self.assertNotIn("repeated-text", codes(sm.validate(m)))
+                items[2][field] = text.lower()
+                issues = sm.validate(m)
+                warnings = [i for i in issues if i[1] == "repeated-text"]
+                self.assertEqual(len(warnings), 1)
+                self.assertEqual(warnings[0][0], "warn")
+                message = warnings[0][2]
+                self.assertIn("`%s`" % field, message)
+                self.assertIn("3 items", message)
+                for item in items:
+                    self.assertIn(item["id"], message)
+                self.assertIn("say it once (e.g. in app.summary or a gap) or shorten it", message)
+                self.assertNotIn("repeated-text", codes(issues, "error"))
+
+    def test_repeated_text_groups_values_without_combining_families(self):
+        m = sm.load_model(self.dir)
+        text = "This source detail is repeated across several items."
+        for item in m["stories"][:2]:
+            item["where"] = text
+        m["screens"][0]["where"] = text
+        m["stories"][0]["notes"] = text
+        self.assertNotIn("repeated-text", codes(sm.validate(m)))
+        for item in m["stories"][:3]:
+            item["notes"] = text
+        other = "A different long detail repeated across source items."
+        for item in m["stories"][3:6]:
+            item["notes"] = other
+        warnings = [i for i in sm.validate(m) if i[1] == "repeated-text"]
+        self.assertEqual(len(warnings), 2)
+        self.assertTrue(all("3 items" in msg for _, _, msg in warnings))
+
+    def test_short_and_empty_repeated_text_do_not_warn(self):
+        m = sm.load_model(self.dir)
+        for family, fields in (("stories", ("verified", "where", "notes")),
+                               ("screens", ("where", "notes")), ("gaps", ("where",))):
+            for item in m[family]:
+                for field in fields:
+                    item[field] = "app, 2026-10-15" if field != "notes" else "  "
+        # Screen verification is length-checked, but is not a repeated-text family.
+        for item in m["screens"]:
+            item["verified"] = "Repeated screen verification is deliberately excluded."
+        self.assertNotIn("repeated-text", codes(sm.validate(m)))
+        for item in m["stories"]:
+            item["notes"] = "x" * 39
+        self.assertNotIn("repeated-text", codes(sm.validate(m)))
+
+    def test_text_warnings_allow_validate_and_build_except_under_strict(self):
+        import contextlib, io
+        self.edit("want: to understand what the app does before I add anything", "want: " + "x" * 161)
+        self.edit('verified: "app, 2026-10-15"',
+                  'verified: "app, 2026-10-15"\n    notes: A repeated detail covering at least forty characters.', count=3)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(sm.main(["validate", self.dir]), 0)
+            self.assertEqual(sm.main(["validate", self.dir, "--strict"]), 1)
+            self.assertEqual(sm.main(["build", self.dir, "--formats", "report", "--strict"]), 1)
+            self.assertFalse(os.path.exists(os.path.join(self.dir, "generated")))
+            self.assertEqual(sm.main(["build", self.dir, "--formats", "report"]), 0)
+        self.assertTrue(os.path.isfile(os.path.join(self.dir, "generated", "REPORT.md")))
+        self.assertIn("long-field", out.getvalue())
+        self.assertIn("repeated-text", out.getvalue())
+        self.assertIn("0 error(s)", out.getvalue())
+
+    def test_validate_help_names_text_warnings(self):
+        import contextlib, io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit) as ex:
+            sm.main(["validate", "--help"])
+        self.assertEqual(ex.exception.code, 0)
+        self.assertIn("long-field", out.getvalue())
+        self.assertIn("repeated-text", out.getvalue())
+
 
 class TestTopics(Base):
     def test_flow_without_topic_is_error(self):
