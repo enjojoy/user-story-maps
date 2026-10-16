@@ -6,9 +6,14 @@ Keep your app's topics, personas, flows, screens and user stories in one `storie
 
 *[Wikipedia iOS](https://github.com/wikimedia/wikipedia-ios) (dark theme), from [`examples/wikipedia-ios/stories.yaml`](examples/wikipedia-ios/stories.yaml): simulator screenshots in topic swimlanes, with thick arrows where users cross topics. Unofficial illustration of the open-source app (MIT), not affiliated with the Wikimedia Foundation. Captured 2026-10-15 from commit `ca8aaeb95639ca82105bcd5510277d8dde0e420e`. Trademarks and content belong to their owners (Wikipedia content CC BY-SA).*
 
+![Architecture by topic of the Open-Golf iOS example](examples/open-golf/generated/architecture-preview.png)
+
+*[Open-Golf](https://github.com/mgerdes/Open-Golf) (MIT, 3D minigolf game, light theme), from [`examples/open-golf/stories.yaml`](examples/open-golf/stories.yaml): simulator screenshots in topic swimlanes. Unofficial illustration of the open-source game, not affiliated with its author. Captured 2026-10-16 from upstream commit `b9029f1e80c3110ae3d4fc9300854bdaeef96508`. Art credits (Kenney Nature Kit, CC0; other assets not verified) are in [`examples/open-golf/README.md`](examples/open-golf/README.md) and [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).*
+
 ## Quick start
 ```bash
 python3 scripts/storymap.py build examples/wikipedia-ios           # real-app example (dark)
+python3 scripts/storymap.py build examples/open-golf               # real-app example (light)
 python3 scripts/storymap.py init docs/story-map --agents           # your app: stories.yaml, screens/, .gitignore
 python3 scripts/storymap.py theme-from path/to/app/source          # optional: draft theme: from the app's tokens
 python3 scripts/storymap.py validate docs/story-map && python3 scripts/storymap.py build docs/story-map
