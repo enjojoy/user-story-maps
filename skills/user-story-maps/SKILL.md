@@ -103,6 +103,7 @@ Details: [`references/looks.md`](references/looks.md), [`theme.md`](references/t
 - **Topic swimlanes:** `architecture.png` = one coloured lane per topic in `order`, screens in an aligned grid, thick labelled cross-topic arrows.
 - **Tree layout:** 2+ outgoing edges → trunk, orthogonal bus, aligned children centred on the parent.
 - **Resolution:** screenshots ≥ native pixels (zoom reads all text); never downscaled, the canvas grows. Only HTML embeds reduced copies.
+- **Huge images in a repo or PR:** ship one GitHub-friendly preview (≤ ~8000 px wide, e.g. `architecture-preview.png`) plus the full-resolution original as a download link. Never split an image into tiles.
 
 ## Capture
 
